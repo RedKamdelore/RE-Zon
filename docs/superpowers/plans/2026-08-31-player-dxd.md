@@ -6,7 +6,8 @@
 
 **Architecture:** Electron (main: окно/трей/сканирование/JSON-persistence/IPC; preload: contextBridge; renderer: React+zustand+Web Audio). Источник музыки — интерфейс `MusicSource` с реализациями `LocalFolderSource` и `DemoSource`. Вся тестируемая логика (очередь, поиск, плейлисты) — чистые функции в `src/shared/`.
 
-**Tech Stack:** electron-vite, React 18, TypeScript, zustand, music-metadata, Web Audio API, electron-builder (NSIS), vitest.
+**Tech Stack:** electron-vite, React 19, TypeScript, zustand, music-metadata, Web Audio API, electron-builder (NSIS), vitest.
+> Note: installed majors — react 19, zustand 5, music-metadata 11, typescript 7, vite 7, electron-vite 5 (pinned for peer-dep compatibility).
 
 **Project root:** `C:\Users\Administrator\Desktop\САМОПАЛ\Player_DXD`
 
@@ -98,17 +99,11 @@ npm install -D electron electron-vite vite @vitejs/plugin-react typescript vites
     "test": "vitest run",
     "dist": "electron-vite build && electron-builder",
     "dist:dir": "electron-vite build && electron-builder --dir"
-  },
-  "dependencies": {
-    "music-metadata": "^10.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zustand": "^4.5.0"
   }
 }
 ```
 
-(поле devDependencies заполнит npm install -D)
+(поля dependencies/devDependencies заполнит npm install — версии берутся из npm)
 
 - [ ] **Step 3: `electron.vite.config.ts`**
 
