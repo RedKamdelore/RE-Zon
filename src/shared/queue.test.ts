@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextIndex, prevIndex, buildShuffleOrder } from './queue'
+import { nextIndex, prevIndex, buildShuffleOrder, upcomingPositions } from './queue'
 
 describe('queue logic', () => {
   const order = [0, 1, 2, 3]
@@ -26,5 +26,15 @@ describe('queue logic', () => {
     const shuffled = buildShuffleOrder(10, 3)
     expect(shuffled[0]).toBe(3)
     expect([...shuffled].sort((a, b) => a - b)).toEqual([0,1,2,3,4,5,6,7,8,9])
+  })
+
+  it('upcomingPositions: order-space positions after pos', () => {
+    expect(upcomingPositions([2, 0, 1, 3], 1)).toEqual([2, 3])
+    expect(upcomingPositions([0, 1, 2], 0)).toEqual([1, 2])
+  })
+
+  it('upcomingPositions: empty at the end or with empty order', () => {
+    expect(upcomingPositions([0, 1], 1)).toEqual([])
+    expect(upcomingPositions([], 0)).toEqual([])
   })
 })

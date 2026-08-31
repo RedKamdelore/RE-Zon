@@ -16,6 +16,11 @@ export function prevIndex(order: number[], pos: number): number {
   return Math.max(0, pos - 1)
 }
 
+/** Позиции внутри order после текущей (секция «Далее в очереди») */
+export function upcomingPositions(order: number[], pos: number): number[] {
+  return order.map((_, i) => i).slice(pos + 1)
+}
+
 /** Перемешанный порядок: текущий трек первым, остальные — Fisher–Yates */
 export function buildShuffleOrder(length: number, current: number): number[] {
   const rest: number[] = []
