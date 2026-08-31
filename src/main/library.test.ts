@@ -32,9 +32,11 @@ describe('demoTracks', () => {
   it('возвращает 4 демо-трека с именами из пакета', () => {
     const tracks = demoTracks(DEMO_DIR)
     expect(tracks).toHaveLength(4)
-    expect(tracks.map(t => t.title).sort()).toEqual(
-      ['Analog Dreams', 'Neon Sunset', 'Night Drive', 'Rainy Loops'],
-    )
+    const byFile = new Map(tracks.map(t => [t.filePath.split(/[\\/]/).pop(), t]))
+    expect(byFile.get('analog-dreams.wav')?.title).toBe('Analog Dreams')
+    expect(byFile.get('neon-sunset.wav')?.title).toBe('Neon Sunset')
+    expect(byFile.get('night-drive.wav')?.title).toBe('Night Drive')
+    expect(byFile.get('rainy-loops.wav')?.title).toBe('Rainy Loops')
     for (const t of tracks) {
       expect(t.sourceId).toBe('demo')
       expect(t.album).toBe('Player_DXD Demo Pack')

@@ -53,12 +53,14 @@ export async function scanFolders(folders: string[]): Promise<Track[]> {
 
 /** Демо-треки из resources/demo — когда локальной музыки нет */
 export function demoTracks(demoDir: string): Track[] {
+  // порядок NAMES соответствует алфавитному порядку имён файлов (sort ниже)
   const NAMES: Array<[string, string]> = [
-    ['Neon Sunset', 'DXD Ensemble'], ['Night Drive', 'DXD Ensemble'],
-    ['Rainy Loops', 'Sampled Souls'], ['Analog Dreams', 'Sampled Souls'],
+    ['Analog Dreams', 'Sampled Souls'], ['Neon Sunset', 'DXD Ensemble'],
+    ['Night Drive', 'DXD Ensemble'], ['Rainy Loops', 'Sampled Souls'],
   ]
   return readdirSync(demoDir)
     .filter(f => f.endsWith('.wav'))
+    .sort()
     .map((f, i) => ({
       id: `demo:${f}`,
       sourceId: 'demo',
