@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Track, RepeatMode } from '@shared/types'
 import { nextIndex, prevIndex, buildShuffleOrder } from '@shared/queue'
-import { AudioEngine, mediaUrl } from '../audio/engine'
+import { AudioEngine, mediaUrl, clampVolume } from '../audio/engine'
 
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
@@ -12,6 +12,7 @@ export interface PlayerEngine {
   seek: (sec: number) => void
   setVolume: (v: number) => void
   setEqGain: (band: number, db: number) => void
+  load: (url: string) => void // src без воспроизведения ('' — очистить)
 }
 
 export interface PlayerState {
@@ -115,11 +116,13 @@ export function createPlayerStore(engine: PlayerEngine) {
     },
 
     setVolume: (v) => {
-      engine.setVolume(v)
-      set({ volume: v })
+      const clamped = clampVolume(v)
+      engine.setVolume(clamped)
+      set({ volume: clamped })
     },
 
     setEqGain: (band, db) => {
+      if (band < 0 || band >= get().eqGains.length) return
       engine.setEqGain(band, db)
       const eqGains = [...get().eqGains]
       eqGains[band] = db
@@ -156,8 +159,11 @@ export function createPlayerStore(engine: PlayerEngine) {
     },
 
     // Упрощённая семантика: после удаления order перестраивается как identity
-    // (shuffle-порядок теряется), pos указывает на текущий трек в новой очереди.
-    // Если удалён играющий трек — воспроизведение останавливается.
+    // (shuffle-порядок теряется → shuffle сбрасывается в false),
+    // pos указывает на текущий трек в новой очереди.
+    // Если удалён играющий трек — воспроизведение останавливается, а src нового
+    // текущего трека предзагружается через load(), чтобы togglePlay() не
+    // воскресил удалённый трек (src элемента иначе остался бы старым).
     removeFromQueue: (position) => {
       const { queue, order, pos } = get()
       if (position < 0 || position >= order.length) return
@@ -167,10 +173,11 @@ export function createPlayerStore(engine: PlayerEngine) {
       const newOrder = identityOrder(newQueue.length)
       if (removedQueueIndex === playingQueueIndex) {
         engine.pause()
-        set({ queue: newQueue, order: newOrder, pos: 0, playing: false, currentSec: 0 })
+        engine.load(newQueue.length > 0 ? mediaUrl(newQueue[0].filePath) : '')
+        set({ queue: newQueue, order: newOrder, pos: 0, playing: false, currentSec: 0, shuffle: false })
       } else {
         const newPos = playingQueueIndex > removedQueueIndex ? playingQueueIndex - 1 : playingQueueIndex
-        set({ queue: newQueue, order: newOrder, pos: newPos })
+        set({ queue: newQueue, order: newOrder, pos: newPos, shuffle: false })
       }
     },
 
@@ -206,19 +213,49 @@ const lazyEngine: PlayerEngine = {
   seek: (sec) => getRealEngine().seek(sec),
   setVolume: (v) => getRealEngine().setVolume(v),
   setEqGain: (band, db) => getRealEngine().setEqGain(band, db),
+  load: (url) => getRealEngine().load(url),
 }
 
 export const usePlayerStore = createPlayerStore(lazyEngine)
 
-/** Подписка на события <audio>: вызывается один раз из App (поздний task) */
+/** Движок синглтон-стора; первый вызов материализует реальный AudioEngine */
+export function getPlayerEngine(): PlayerEngine {
+  return getRealEngine()
+}
+
+// Текущая активная подписка — защита от двойной регистрации слушателей
+let currentSubscription: (() => void) | null = null
+
+/**
+ * Подписка на события <audio>: вызывается один раз из App (поздний task).
+ * Идемпотентна: повторный вызов снимает предыдущую подписку.
+ * Возвращает функцию отписки.
+ */
 export function initPlayerSubscriptions(
-  engine: PlayerEngine,
+  engine: PlayerEngine = getPlayerEngine(),
   store: typeof usePlayerStore = usePlayerStore,
-): void {
-  engine.element.addEventListener('timeupdate', () => {
-    store.setState({ currentSec: engine.element.currentTime })
-  })
-  engine.element.addEventListener('ended', () => {
-    store.getState().next() // auto-advance
-  })
+): () => void {
+  currentSubscription?.()
+  const ac = new AbortController()
+  const { signal } = ac
+  engine.element.addEventListener(
+    'timeupdate',
+    () => {
+      store.setState({ currentSec: engine.element.currentTime })
+    },
+    { signal },
+  )
+  engine.element.addEventListener(
+    'ended',
+    () => {
+      store.getState().next() // auto-advance
+    },
+    { signal },
+  )
+  const unsubscribe = (): void => {
+    ac.abort()
+    if (currentSubscription === unsubscribe) currentSubscription = null
+  }
+  currentSubscription = unsubscribe
+  return unsubscribe
 }

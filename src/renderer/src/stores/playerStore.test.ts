@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createPlayerStore, type PlayerEngine } from './playerStore'
+import { createPlayerStore, initPlayerSubscriptions, type PlayerEngine } from './playerStore'
 import { mediaUrl } from '../audio/engine'
 import type { Track } from '@shared/types'
 
@@ -10,20 +10,36 @@ interface FakeCalls {
   seek: number[]
   setVolume: number[]
   setEqGain: [number, number][]
+  load: string[]
 }
 
-function makeFakeEngine(): { engine: PlayerEngine; calls: FakeCalls } {
-  const calls: FakeCalls = { play: [], pause: 0, resume: 0, seek: [], setVolume: [], setEqGain: [] }
+function makeFakeEngine(): { engine: PlayerEngine; calls: FakeCalls; fire: (type: string) => void } {
+  const calls: FakeCalls = { play: [], pause: 0, resume: 0, seek: [], setVolume: [], setEqGain: [], load: [] }
+  const listeners = new Map<string, Set<EventListener>>()
+  const element = {
+    currentTime: 0,
+    addEventListener: (type: string, fn: EventListener, opts?: { signal?: AbortSignal }) => {
+      let set = listeners.get(type)
+      if (!set) {
+        set = new Set()
+        listeners.set(type, set)
+      }
+      set.add(fn)
+      opts?.signal?.addEventListener('abort', () => set.delete(fn))
+    },
+  }
   const engine: PlayerEngine = {
-    element: { currentTime: 0 } as HTMLAudioElement,
+    element: element as unknown as HTMLAudioElement,
     play: (url) => { calls.play.push(url) },
     pause: () => { calls.pause++ },
     resume: () => { calls.resume++ },
     seek: (s) => { calls.seek.push(s) },
     setVolume: (v) => { calls.setVolume.push(v) },
     setEqGain: (b, d) => { calls.setEqGain.push([b, d]) },
+    load: (url) => { calls.load.push(url) },
   }
-  return { engine, calls }
+  const fire = (type: string) => listeners.get(type)?.forEach((fn) => fn({ type } as unknown as Event))
+  return { engine, calls, fire }
 }
 
 function makeTrack(n: number): Track {
@@ -206,6 +222,118 @@ describe('playerStore', () => {
     store.getState().togglePlay()
     expect(store.getState().playing).toBe(true)
     expect(calls.resume).toBe(1)
+  })
+
+  it('removeFromQueue of playing track preloads the new current track; togglePlay never touches the removed URL', () => {
+    store.getState().playTracks(TRACKS, 1) // играет t2
+    store.getState().removeFromQueue(1) // удаляем играющий t2
+    const s = store.getState()
+    expect(s.playing).toBe(false)
+    // новый текущий трек (t1) предзагружен, но не играет
+    expect(calls.load).toEqual([mediaUrl(TRACKS[0].filePath)])
+    expect(calls.play).toHaveLength(1)
+    store.getState().togglePlay()
+    expect(calls.resume).toBe(1)
+    expect(calls.play).toHaveLength(1) // resume, без play с URL удалённого трека
+    expect(store.getState().playing).toBe(true)
+  })
+
+  it('removeFromQueue emptying the queue clears the engine src', () => {
+    store.getState().playTracks([TRACKS[0]], 0)
+    store.getState().removeFromQueue(0)
+    const s = store.getState()
+    expect(s.queue).toHaveLength(0)
+    expect(s.playing).toBe(false)
+    expect(calls.load).toEqual([''])
+    store.getState().togglePlay() // пустая очередь — no-op
+    expect(calls.resume).toBe(0)
+  })
+
+  it('removeFromQueue collapses shuffle: sets shuffle=false and keeps current track', () => {
+    store.getState().playTracks(TRACKS, 1)
+    store.getState().toggleShuffle()
+    expect(store.getState().shuffle).toBe(true)
+    store.getState().removeFromQueue(1) // удаляем не-играющий (pos 0 — текущий)
+    const s = store.getState()
+    expect(s.shuffle).toBe(false)
+    expect(s.queue).toHaveLength(2)
+    expect(s.order).toEqual([0, 1])
+    expect(s.queue[s.order[s.pos]].id).toBe('local:t2')
+    expect(s.playing).toBe(true)
+  })
+
+  it('removeFromQueue of a track before the playing one re-anchors pos to the same track', () => {
+    store.getState().playTracks(TRACKS, 2) // играет t3, pos=2
+    store.getState().removeFromQueue(0) // удаляем t1 (до играющего)
+    const s = store.getState()
+    expect(s.queue.map((t) => t.id)).toEqual(['local:t2', 'local:t3'])
+    expect(s.pos).toBe(1)
+    expect(s.queue[s.order[s.pos]].id).toBe('local:t3')
+    expect(s.playing).toBe(true)
+    expect(calls.play).toHaveLength(1) // без перезагрузки
+  })
+
+  it('setVolume clamps to [0,1]', () => {
+    store.getState().setVolume(1.5)
+    expect(calls.setVolume).toEqual([1])
+    expect(store.getState().volume).toBe(1)
+    store.getState().setVolume(-0.2)
+    expect(calls.setVolume).toEqual([1, 0])
+    expect(store.getState().volume).toBe(0)
+  })
+
+  it('setEqGain ignores out-of-range band indices', () => {
+    store.getState().setEqGain(10, 5)
+    store.getState().setEqGain(-1, 5)
+    expect(calls.setEqGain).toEqual([])
+    expect(store.getState().eqGains).toEqual(new Array(10).fill(0))
+  })
+})
+
+describe('initPlayerSubscriptions', () => {
+  let engine: PlayerEngine
+  let calls: FakeCalls
+  let fire: (type: string) => void
+  let store: ReturnType<typeof createPlayerStore>
+
+  beforeEach(() => {
+    ;({ engine, calls, fire } = makeFakeEngine())
+    store = createPlayerStore(engine)
+  })
+
+  it('timeupdate updates currentSec', () => {
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    ;(engine.element as { currentTime: number }).currentTime = 42
+    fire('timeupdate')
+    expect(store.getState().currentSec).toBe(42)
+  })
+
+  it('ended auto-advances to the next track', () => {
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    fire('ended')
+    expect(store.getState().pos).toBe(1)
+    expect(calls.play).toHaveLength(2)
+    expect(calls.play[1]).toBe(mediaUrl(TRACKS[1].filePath))
+  })
+
+  it('double registration fires next only once per ended event', () => {
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    initPlayerSubscriptions(engine, store) // повторный вызов не должен дублировать
+    fire('ended')
+    expect(calls.play).toHaveLength(2) // ровно один auto-next
+    expect(store.getState().pos).toBe(1)
+  })
+
+  it('returned unsubscribe detaches listeners', () => {
+    store.getState().playTracks(TRACKS, 0)
+    const unsub = initPlayerSubscriptions(engine, store)
+    unsub()
+    fire('ended')
+    expect(calls.play).toHaveLength(1) // no auto-next
+    expect(store.getState().pos).toBe(0)
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { EQ_FREQS, EQ_PRESETS } from './engine'
+import { EQ_FREQS, EQ_PRESETS, clampVolume } from './engine'
 
 describe('engine EQ constants', () => {
   it('has 10 bands and standard frequencies', () => {
@@ -11,5 +11,11 @@ describe('engine EQ constants', () => {
       expect(gains).toHaveLength(10)
     }
     expect(EQ_PRESETS.Flat).toEqual(new Array(10).fill(0))
+  })
+
+  it('clampVolume clamps to [0,1]', () => {
+    expect(clampVolume(0.5)).toBe(0.5)
+    expect(clampVolume(1.5)).toBe(1)
+    expect(clampVolume(-0.2)).toBe(0)
   })
 })

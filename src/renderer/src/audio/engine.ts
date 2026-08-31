@@ -9,8 +9,10 @@ export const EQ_PRESETS: Record<string, number[]> = {
   Vocal: [-2, -3, -2, 0, 2, 4, 4, 3, 1, 0],
 }
 
-export class AudioEngine {
-  private ctx = new AudioContext()
+/** Громкость в диапазоне [0, 1] */
+export const clampVolume = (v: number): number => Math.min(1, Math.max(0, v))
+
+export class AudioEngine {  private ctx = new AudioContext()
   private el = new Audio()
   private src = this.ctx.createMediaElementSource(this.el)
   private filters = EQ_FREQS.map((f) => {
@@ -36,22 +38,30 @@ export class AudioEngine {
   play(url: string): void {
     this.el.src = url
     void this.ctx.resume()
-    void this.el.play()
+    // catch: AbortError при быстрой смене src (play() прерывается новым load) — не ошибка
+    this.el.play().catch(() => {})
   }
   pause(): void {
     this.el.pause()
   }
   resume(): void {
     void this.ctx.resume()
-    void this.el.play()
+    // catch: AbortError при быстрой смене src — не ошибка
+    this.el.play().catch(() => {})
+  }
+  /** Устанавливает src без воспроизведения ('' — очистить) */
+  load(url: string): void {
+    if (url) this.el.src = url
+    else this.el.removeAttribute('src')
   }
   seek(sec: number): void {
     this.el.currentTime = sec
   }
   setVolume(v: number): void {
-    this.gain.gain.value = v
+    this.gain.gain.value = clampVolume(v)
   }
   setEqGain(band: number, db: number): void {
+    if (band < 0 || band >= this.filters.length) return
     this.filters[band].gain.value = db
   }
 }
