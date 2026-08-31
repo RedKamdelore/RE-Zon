@@ -4,12 +4,17 @@ import type { PersistedData } from '@shared/types'
 
 function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
   return {
-    version: 1,
+    version: 2,
     musicFolders: ['C:\\Music'],
     playlists: [],
     lyricsOverrides: {},
     volume: 0.8,
     eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    appearance: { skin: 'spotify-dark', accent: '#1DB954', radius: 8, scale: 1 },
+    playback: { crossfadeSec: 0 },
+    playStats: {},
+    lastfmApiKey: '',
+    importSources: {},
     ...overrides,
   }
 }

@@ -5,13 +5,19 @@ import RightPanel from './components/RightPanel'
 import HomeView from './components/HomeView'
 import SearchView from './components/SearchView'
 import PlaylistView from './components/PlaylistView'
+import SettingsView from './components/SettingsView'
 import MiniPlayer from './components/MiniPlayer'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
+import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore } from './stores/lyricsStore'
 
-export type View = { name: 'home' } | { name: 'search' } | { name: 'playlist'; id: string }
+export type View =
+  | { name: 'home' }
+  | { name: 'search' }
+  | { name: 'playlist'; id: string }
+  | { name: 'settings' }
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
@@ -29,6 +35,7 @@ export default function App() {
           setPersistedBase(data)
           usePlaylistStore.getState().init(data.playlists)
           useLyricsStore.getState().init(data.lyricsOverrides)
+          useSettingsStore.getState().init(data) // применяет appearance к DOM
           usePlayerStore.getState().setVolume(data.volume)
           usePlayerStore.getState().applyEqPreset(data.eqGains)
           void useLibraryStore.getState().init(data)
@@ -86,6 +93,7 @@ export default function App() {
       <main className="main">
         {view.name === 'home' && <HomeView />}
         {view.name === 'search' && <SearchView />}
+        {view.name === 'settings' && <SettingsView />}
         {view.name === 'playlist' &&
           (playlist ? (
             <PlaylistView playlist={playlist} tracks={tracks} />

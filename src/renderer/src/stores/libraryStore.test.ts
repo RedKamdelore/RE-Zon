@@ -5,12 +5,17 @@ import type { PersistedData, Track } from '@shared/types'
 
 function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
   return {
-    version: 1,
+    version: 2,
     musicFolders: ['C:\\Music'],
     playlists: [],
     lyricsOverrides: {},
     volume: 0.8,
     eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    appearance: { skin: 'spotify-dark', accent: '#1DB954', radius: 8, scale: 1 },
+    playback: { crossfadeSec: 0 },
+    playStats: {},
+    lastfmApiKey: '',
+    importSources: {},
     ...overrides,
   }
 }
@@ -69,5 +74,45 @@ describe('libraryStore.addFolder', () => {
     await useLibraryStore.getState().addFolder()
     expect(saveData).not.toHaveBeenCalled()
     expect(scanLibrary).not.toHaveBeenCalled()
+  })
+})
+
+describe('libraryStore.removeFolder', () => {
+  beforeEach(() => {
+    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    setPersistedBase(null)
+  })
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).window
+    setPersistedBase(null)
+  })
+
+  it('removes folder, persists and rescans the remaining folders', async () => {
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    const tracks: Track[] = []
+    const scanLibrary = vi.fn().mockResolvedValue(tracks)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData, scanLibrary } }
+    setPersistedBase(makeBase({ musicFolders: ['C:\\Music', 'D:\\Tunes'] }))
+
+    await useLibraryStore.getState().removeFolder('D:\\Tunes')
+    expect(saveData).toHaveBeenCalledTimes(1)
+    expect((saveData.mock.calls[0][0] as PersistedData).musicFolders).toEqual(['C:\\Music'])
+    expect(getPersistedBase()?.musicFolders).toEqual(['C:\\Music'])
+    expect(scanLibrary).toHaveBeenCalledWith(['C:\\Music'])
+    expect(useLibraryStore.getState().usingDemo).toBe(false)
+  })
+
+  it('falls back to demo library when the last folder is removed', async () => {
+    const demo: Track[] = []
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    const demoLibrary = vi.fn().mockResolvedValue(demo)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData, demoLibrary } }
+    setPersistedBase(makeBase())
+
+    await useLibraryStore.getState().removeFolder('C:\\Music')
+    expect(getPersistedBase()?.musicFolders).toEqual([])
+    expect(demoLibrary).toHaveBeenCalled()
+    expect(useLibraryStore.getState().usingDemo).toBe(true)
   })
 })

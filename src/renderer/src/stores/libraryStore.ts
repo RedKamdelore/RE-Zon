@@ -8,6 +8,7 @@ interface LibraryState {
   usingDemo: boolean
   init: (data?: PersistedData) => Promise<void> // data из App (единый loadData); без него — сам грузит
   addFolder: () => Promise<void> // pickFolder → persist musicFolders → rescan
+  removeFolder: (folder: string) => Promise<void> // persist без папки → rescan (пусто → демо)
 }
 
 export const useLibraryStore = create<LibraryState>()((set) => ({
@@ -51,5 +52,22 @@ export const useLibraryStore = create<LibraryState>()((set) => ({
     set({ loading: true })
     const tracks = await window.api.scanLibrary(musicFolders)
     set({ tracks, usingDemo: false, loading: false })
+  },
+
+  removeFolder: async (folder) => {
+    if (typeof window === 'undefined' || !window.api) return
+    const data = getPersistedBase() ?? (await window.api.loadData())
+    const musicFolders = data.musicFolders.filter((f) => f !== folder)
+    const updated = { ...data, musicFolders }
+    await window.api.saveData(updated)
+    setPersistedBase(updated)
+    set({ loading: true })
+    if (musicFolders.length === 0) {
+      const tracks = await window.api.demoLibrary()
+      set({ tracks, usingDemo: true, loading: false })
+    } else {
+      const tracks = await window.api.scanLibrary(musicFolders)
+      set({ tracks, usingDemo: false, loading: false })
+    }
   },
 }))

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { View } from '../App'
 import { usePlaylistStore } from '../stores/playlistStore'
-import { HomeIcon, SearchIcon, PlusIcon, MusicNoteIcon } from './icons'
+import { HomeIcon, SearchIcon, GearIcon, PlusIcon, MusicNoteIcon } from './icons'
 
 interface SidebarProps {
   view: View
@@ -67,6 +67,13 @@ export default function Sidebar({ view, onNavigate }: SidebarProps) {
         >
           <SearchIcon />
           Поиск
+        </button>
+        <button
+          className={`nav-row${view.name === 'settings' ? ' active' : ''}`}
+          onClick={() => onNavigate({ name: 'settings' })}
+        >
+          <GearIcon />
+          Настройки
         </button>
       </div>
 

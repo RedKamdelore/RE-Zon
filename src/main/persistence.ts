@@ -4,17 +4,45 @@ import { join } from 'path'
 import type { PersistedData } from '../shared/types'
 
 export const DEFAULT_DATA: PersistedData = {
-  version: 1,
+  version: 2,
   musicFolders: [],
   playlists: [],
   lyricsOverrides: {},
   volume: 0.8,
   eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  appearance: { skin: 'spotify-dark', accent: '#1DB954', radius: 8, scale: 1 },
+  playback: { crossfadeSec: 0 },
+  playStats: {},
+  lastfmApiKey: '',
+  importSources: {},
 }
 
-/** Чистая функция — тестируется без Electron */
-export function mergeWithDefaults(raw: Partial<PersistedData> | null): PersistedData {
-  return { ...DEFAULT_DATA, ...(raw ?? {}), version: 1 }
+/** Старый формат файла player-data.json (до V2-1) */
+interface PersistedDataV1 {
+  version: 1;
+  musicFolders?: string[];
+  playlists?: PersistedData['playlists'];
+  lyricsOverrides?: Record<string, string>;
+  volume?: number;
+  eqGains?: number[];
+}
+
+/** Миграция v1 → v2: старые поля сохраняются, новые заполняются дефолтами */
+export function migrateV1toV2(data: Partial<PersistedDataV1>): PersistedData {
+  return {
+    ...DEFAULT_DATA,
+    musicFolders: data.musicFolders ?? DEFAULT_DATA.musicFolders,
+    playlists: data.playlists ?? DEFAULT_DATA.playlists,
+    lyricsOverrides: data.lyricsOverrides ?? DEFAULT_DATA.lyricsOverrides,
+    volume: data.volume ?? DEFAULT_DATA.volume,
+    eqGains: data.eqGains ?? DEFAULT_DATA.eqGains,
+  }
+}
+
+/** Чистая функция — тестируется без Electron. Принимает v1 (мигрирует) и v2 */
+export function mergeWithDefaults(raw: Partial<PersistedData> | Partial<PersistedDataV1> | null): PersistedData {
+  if (raw && raw.version === 1) return migrateV1toV2(raw)
+  return { ...DEFAULT_DATA, ...(raw ?? {}), version: 2 }
 }
 
 let cache: PersistedData | null = null

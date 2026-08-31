@@ -1208,3 +1208,131 @@ body {
   width: 32px;
   height: 32px;
 }
+
+/* --- Settings --- */
+.settings-section {
+  max-width: 640px;
+  margin-bottom: 8px;
+}
+
+.settings-label {
+  margin: 16px 0 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.skin-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.skin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-card);
+  background: var(--bg-tile);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.skin-card:hover {
+  background: var(--bg-tile-hover);
+  color: var(--text-primary);
+}
+
+.skin-card.active {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.skin-swatch {
+  width: 96px;
+  height: 56px;
+  border-radius: calc(var(--radius-card) / 2);
+}
+
+.accent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.accent-swatch {
+  width: 32px;
+  height: 32px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.15s;
+}
+
+.accent-swatch:hover {
+  transform: scale(1.1);
+}
+
+.accent-swatch.active {
+  border-color: var(--text-primary);
+}
+
+.accent-custom {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-slider {
+  width: 240px;
+}
+
+.settings-input {
+  width: 320px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--slider-track);
+  border-radius: calc(var(--radius-card) / 2);
+  background: var(--bg-tile);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.settings-input:focus {
+  border-color: var(--accent);
+}
+
+.folder-list {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.folder-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}

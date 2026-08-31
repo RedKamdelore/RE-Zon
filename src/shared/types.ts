@@ -20,11 +20,27 @@ export interface Playlist {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
+export interface AppearanceSettings {
+  skin: string; // 'spotify-dark' | 'light' | 'midnight' | 'frutiger-aero' | 'liquid-glass'
+  accent: string; // hex
+  radius: number; // px, базовый радиус карточек
+  scale: number; // 0.85..1.15, масштаб UI (zoom)
+}
+
+export interface PlaybackSettings {
+  crossfadeSec: number; // 0 = выкл, 1..12
+}
+
 export interface PersistedData {
-  version: 1;
+  version: 2;
   musicFolders: string[];
   playlists: Playlist[];
   lyricsOverrides: Record<string, string>;
   volume: number;
   eqGains: number[]; // 10 значений dB
+  appearance: AppearanceSettings;
+  playback: PlaybackSettings;
+  playStats: Record<string, { count: number; lastPlayed: number }>; // для будущих рекомендаций
+  lastfmApiKey: string;
+  importSources: Record<string, unknown>;
 }
