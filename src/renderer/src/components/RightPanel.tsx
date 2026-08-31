@@ -5,6 +5,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { useLyricsStore, setLyricsOverride } from '../stores/lyricsStore'
 import { fmt } from '../utils/format'
 import { CloseIcon, MusicNoteIcon } from './icons'
+import Equalizer from './Equalizer'
 
 interface RightPanelProps {
   panel: 'queue' | 'lyrics' | 'eq'
@@ -186,7 +187,7 @@ export default function RightPanel({ panel, onClose }: RightPanelProps) {
       <div className="rp-body">
         {panel === 'queue' && <QueuePanel />}
         {panel === 'lyrics' && <LyricsPanel />}
-        {panel === 'eq' && <p className="empty-state">Эквалайзер скоро появится</p>}
+        {panel === 'eq' && <Equalizer />}
       </div>
     </aside>
   )

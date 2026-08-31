@@ -36,16 +36,29 @@ export function getPersistedBase(): PersistedData | null {
 // --- Debounced persist ----------------------------------------------------
 const PERSIST_DELAY = 500
 let persistTimer: ReturnType<typeof setTimeout> | null = null
+let pendingPatch: Partial<PersistedData> = {}
 
-function schedulePersist(playlists: Playlist[]): void {
+/**
+ * Общий дебаунсированный (500 мс) persist: мержит произвольные поля
+ * (playlists, eqGains, …) в persistedBase и сохраняет через saveData.
+ * Серия патчей внутри окна дебаунса накапливается в один saveData.
+ */
+export function persistPatch(patch: Partial<PersistedData>): void {
+  pendingPatch = { ...pendingPatch, ...patch }
   if (persistTimer !== null) clearTimeout(persistTimer)
   persistTimer = setTimeout(() => {
     persistTimer = null
+    const merged = pendingPatch
+    pendingPatch = {}
     if (typeof window === 'undefined' || !window.api || !persistedBase) return
     // Обновляем базу в памяти, чтобы следующие сохранения мержились с ней
-    persistedBase = { ...persistedBase, playlists }
+    persistedBase = { ...persistedBase, ...merged }
     window.api.saveData(persistedBase).catch((e) => console.error('saveData failed:', e))
   }, PERSIST_DELAY)
+}
+
+function schedulePersist(playlists: Playlist[]): void {
+  persistPatch({ playlists })
 }
 
 // --- Default name numbering ------------------------------------------------

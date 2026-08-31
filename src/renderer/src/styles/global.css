@@ -1048,3 +1048,95 @@ body {
   display: flex;
   gap: 12px;
 }
+
+/* --- Эквалайзер --- */
+.eq-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px 8px;
+}
+
+.eq-preset {
+  padding: 4px 12px;
+  border: 1px solid var(--text-secondary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.eq-preset:hover {
+  border-color: var(--text-primary);
+}
+
+.eq-preset.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.eq-sliders {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 4px 0;
+}
+
+.eq-band {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 28px;
+}
+
+.eq-db {
+  min-height: 13px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Вертикальный range: writing-mode + direction: rtl → min внизу, max вверху (Chromium) */
+.eq-slider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 4px;
+  height: 120px;
+  margin: 0;
+  border-radius: 2px;
+  background: linear-gradient(
+    to top,
+    var(--slider-fill, #ffffff) var(--progress, 50%),
+    var(--slider-track) var(--progress, 50%)
+  );
+  cursor: pointer;
+  outline: none;
+}
+
+.eq-slider:hover {
+  --slider-fill: var(--accent);
+}
+
+.eq-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.eq-freq {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.eq-reset {
+  margin: 12px 8px 0;
+}

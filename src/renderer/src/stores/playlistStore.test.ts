@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { usePlaylistStore, setPersistedBase } from './playlistStore'
+import { usePlaylistStore, setPersistedBase, persistPatch } from './playlistStore'
 import type { PersistedData } from '@shared/types'
 
 function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
@@ -126,6 +126,25 @@ describe('playlistStore', () => {
     expect(saveData).toHaveBeenCalledTimes(2)
     const saved = saveData.mock.calls[1][0] as PersistedData
     expect(saved.playlists).toHaveLength(2)
+    expect(saved.volume).toBe(0.8)
+  })
+
+  it('persistPatch merges arbitrary fields (eqGains) debounced into the base', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    const pl = { id: 'pl-1', name: 'Test', trackIds: [], createdAt: 1 }
+    setPersistedBase(makeBase({ playlists: [pl] }))
+
+    persistPatch({ eqGains: [12, 0, 0, 0, 0, 0, 0, 0, 0, 0] })
+    persistPatch({ eqGains: [12, 5, 0, 0, 0, 0, 0, 0, 0, 0] })
+    expect(saveData).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(500)
+    expect(saveData).toHaveBeenCalledTimes(1)
+    const saved = saveData.mock.calls[0][0] as PersistedData
+    expect(saved.eqGains).toEqual([12, 5, 0, 0, 0, 0, 0, 0, 0, 0])
+    expect(saved.playlists).toEqual([pl])
     expect(saved.volume).toBe(0.8)
   })
 
