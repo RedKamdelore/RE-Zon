@@ -1,0 +1,474 @@
+/* Player_DXD — Spotify-style dark theme */
+
+:root {
+  --bg-app: #121212;
+  --bg-panel: #000000;
+  --bg-tile: #181818;
+  --bg-tile-hover: #282828;
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --accent: #1db954;
+  --accent-hover: #1ed760;
+  --slider-track: #4d4d4d;
+  --playerbar-height: 90px;
+  --sidebar-width: 280px;
+  --radius-card: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#root {
+  overflow: hidden;
+}
+
+/* --- Скроллбары: slim, thumb проявляется при наведении --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--slider-track);
+}
+
+/* --- Каркас приложения --- */
+.app {
+  display: grid;
+  grid-template-rows: 1fr var(--playerbar-height);
+  grid-template-columns: var(--sidebar-width) 1fr;
+  gap: 8px;
+  height: 100vh;
+  padding: 8px 8px 0;
+}
+
+/* --- Sidebar --- */
+.sidebar {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sidebar-card {
+  background: var(--bg-panel);
+  border-radius: var(--radius-card);
+  padding: 8px 12px;
+}
+
+.sidebar-card.library {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 12px 12px 8px;
+}
+
+.brand-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.nav-row:hover,
+.nav-row.active {
+  color: var(--text-primary);
+}
+
+.library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.playlist-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+}
+
+.playlist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playlist-row:hover {
+  background: var(--bg-tile-hover);
+  color: var(--text-primary);
+}
+
+.playlist-row.active {
+  color: var(--text-primary);
+  background: var(--bg-tile);
+}
+
+.playlist-cover {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: var(--bg-tile-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.playlist-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.empty-state {
+  padding: 12px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* --- Main --- */
+.main {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-radius: var(--radius-card);
+  padding: 24px 32px 32px;
+}
+
+.main h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.main h2 {
+  margin: 24px 0 12px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.main .muted {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.track-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.track-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.track-row:hover {
+  background: var(--bg-tile-hover);
+}
+
+.track-row .track-index {
+  font-size: 14px;
+  text-align: right;
+}
+
+.track-row .track-title {
+  display: block;
+  color: var(--text-primary);
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-row .track-artist {
+  display: block;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-row .track-duration {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Кнопки --- */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, transform 0.1s;
+}
+
+.icon-btn:hover {
+  color: var(--text-primary);
+}
+
+.icon-btn.active {
+  color: var(--accent);
+}
+
+.icon-btn.active:hover {
+  color: var(--accent-hover);
+}
+
+.play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: #000000;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.play-btn:hover {
+  transform: scale(1.05);
+}
+
+.repeat-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.repeat-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  pointer-events: none;
+}
+
+/* --- PlayerBar --- */
+.playerbar {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: var(--playerbar-height);
+  padding: 0 16px 8px;
+}
+
+.pb-left {
+  width: 30%;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pb-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  background: var(--bg-tile-hover);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.pb-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pb-track-info {
+  min-width: 0;
+}
+
+.pb-title {
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pb-artist {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pb-center {
+  width: 40%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pb-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.pb-seek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-seek .slider {
+  flex: 1;
+}
+
+.pb-right {
+  width: 30%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.pb-right .slider {
+  width: 92px;
+}
+
+.controls-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* --- Слайдеры (seek / volume) в стиле Spotify --- */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  margin: 0;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--slider-fill, #ffffff) var(--progress, 0%),
+    var(--slider-track) var(--progress, 0%)
+  );
+  cursor: pointer;
+  outline: none;
+}
+
+.slider:hover {
+  --slider-fill: var(--accent);
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.slider:hover::-webkit-slider-thumb {
+  opacity: 1;
+}

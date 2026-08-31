@@ -35,7 +35,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  protocol.handle('media', (req) => {
+  protocol.handle('media', async (req) => {
     try {
       const filePath = decodeMediaUrl(req.url)
       // Прагматичный уровень защиты: allowlist по расширению, а не по списку
@@ -44,7 +44,16 @@ app.whenReady().then(() => {
       if (!ALLOWED_MEDIA_EXT.has(extname(filePath).toLowerCase())) {
         return new Response('Forbidden', { status: 403 })
       }
-      return net.fetch(pathToFileURL(filePath).toString())
+      // CORS-заголовок обязателен: MediaElementAudioSourceNode в рендерере
+      // использует crossOrigin='anonymous' — без него <audio> даёт тишину.
+      const res = await net.fetch(pathToFileURL(filePath).toString())
+      const headers = new Headers(res.headers)
+      headers.set('Access-Control-Allow-Origin', '*')
+      return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+      })
     } catch {
       return new Response('Not found', { status: 404 })
     }
