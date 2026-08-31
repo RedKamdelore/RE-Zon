@@ -10,6 +10,16 @@
   --accent: #1db954;
   --accent-hover: #1ed760;
   --slider-track: #4d4d4d;
+  --slider-thumb: #ffffff;
+  --border-subtle: #282828;
+  --bg-popup: #282828;
+  --hover-overlay: rgba(255, 255, 255, 0.1);
+  --popup-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --on-accent: #000000;
+  --play-btn-fg: #000000;
+  --badge-bg: #000000;
+  --badge-text: #ffffff;
+  --cover-placeholder: linear-gradient(135deg, #333333, #181818);
   --playerbar-height: 90px;
   --sidebar-width: 280px;
   --radius-card: 8px;
@@ -243,7 +253,7 @@ body {
   top: 0;
   z-index: 1;
   background: var(--bg-app);
-  border-bottom: 1px solid #282828;
+  border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -449,8 +459,8 @@ body {
 .search-best-pill {
   padding: 3px 10px;
   border-radius: 999px;
-  background: #000000;
-  color: var(--text-primary);
+  background: var(--badge-bg);
+  color: var(--badge-text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -468,8 +478,8 @@ body {
   min-width: 180px;
   padding: 4px;
   border-radius: 4px;
-  background: #282828;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  background: var(--bg-popup);
+  box-shadow: var(--popup-shadow);
 }
 
 .ctx-item {
@@ -487,7 +497,7 @@ body {
 }
 
 .ctx-item:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-overlay);
 }
 
 /* Второй уровень меню — выбор плейлиста */
@@ -501,9 +511,9 @@ body {
 .pl-name-input {
   width: 100%;
   padding: 4px 8px;
-  border: 1px solid var(--accent, #1db954);
+  border: 1px solid var(--accent);
   border-radius: 4px;
-  background: #121212;
+  background: var(--bg-app);
   color: var(--text-primary);
   font-family: inherit;
   font-size: 14px;
@@ -597,7 +607,7 @@ body {
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: #000000;
+  color: var(--on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -625,7 +635,7 @@ body {
   width: 192px;
   height: 192px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #333333, #181818);
+  background: var(--cover-placeholder);
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -668,7 +678,7 @@ body {
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  color: #000000;
+  color: var(--on-accent);
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
 }
@@ -719,7 +729,7 @@ body {
   border: none;
   border-radius: 50%;
   background: var(--text-primary);
-  color: #000000;
+  color: var(--play-btn-fg);
   cursor: pointer;
   transition: transform 0.1s;
 }
@@ -857,7 +867,7 @@ body {
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    var(--slider-fill, #ffffff) var(--progress, 0%),
+    var(--slider-fill, var(--text-primary)) var(--progress, 0%),
     var(--slider-track) var(--progress, 0%)
   );
   cursor: pointer;
@@ -874,7 +884,7 @@ body {
   height: 12px;
   border: none;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--slider-thumb);
   opacity: 0;
   transition: opacity 0.1s;
 }
@@ -1112,7 +1122,7 @@ body {
   border-radius: 2px;
   background: linear-gradient(
     to top,
-    var(--slider-fill, #ffffff) var(--progress, 50%),
+    var(--slider-fill, var(--text-primary)) var(--progress, 50%),
     var(--slider-track) var(--progress, 50%)
   );
   cursor: pointer;
@@ -1129,7 +1139,7 @@ body {
   height: 12px;
   border: none;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--slider-thumb);
 }
 
 .eq-freq {
@@ -1146,7 +1156,7 @@ body {
   display: block;
   height: 100vh;
   padding: 0;
-  background: #181818;
+  background: var(--bg-tile);
 }
 
 .mini-player {
@@ -1167,7 +1177,7 @@ body {
   justify-content: center;
   border-radius: 4px;
   overflow: hidden;
-  background: #282828;
+  background: var(--bg-tile-hover);
   color: var(--text-secondary);
 }
 
