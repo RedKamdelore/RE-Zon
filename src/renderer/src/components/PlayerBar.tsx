@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
+import { fmt } from '../utils/format'
 import {
   PlayIcon,
   PauseIcon,
@@ -19,12 +20,6 @@ export type Panel = 'queue' | 'lyrics' | 'eq' | 'mini'
 
 interface PlayerBarProps {
   onTogglePanel: (panel: Panel) => void
-}
-
-const fmt = (sec: number): string => {
-  if (!Number.isFinite(sec) || sec < 0) return '0:00'
-  const s = Math.floor(sec)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 /** Процент заполнения слайдера → CSS-переменная для градиента трека */

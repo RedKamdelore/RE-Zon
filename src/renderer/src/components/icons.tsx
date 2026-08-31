@@ -65,3 +65,9 @@ export const MiniIcon = ({ size }: IconProps) =>
 
 export const VolumeIcon = ({ size }: IconProps) =>
   icon('M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.05A4.5 4.5 0 0 0 16.5 12z', size)
+
+export const ClockIcon = ({ size }: IconProps) =>
+  icon(
+    'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+    size,
+  )
