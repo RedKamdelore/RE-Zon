@@ -13,9 +13,9 @@ protocol.registerSchemesAsPrivileged([
 
 const ALLOWED_MEDIA_EXT = new Set(['.mp3', '.flac', '.ogg', '.wav', '.m4a', '.opus'])
 
-// Фиксируем userData на player-dxd независимо от productName сборки,
+// Фиксируем userData на rezon независимо от productName сборки,
 // чтобы dev- и packaged-версии делили одни и те же данные.
-app.setPath('userData', join(app.getPath('appData'), 'player-dxd'))
+app.setPath('userData', join(app.getPath('appData'), 'rezon'))
 
 function decodeMediaUrl(url: string): string {
   return Buffer.from(url.slice('media://'.length), 'base64url').toString('utf-8')

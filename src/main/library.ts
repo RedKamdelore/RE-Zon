@@ -66,7 +66,7 @@ export function demoTracks(demoDir: string): Track[] {
       sourceId: 'demo',
       title: NAMES[i]?.[0] ?? f,
       artist: NAMES[i]?.[1] ?? 'Demo',
-      album: 'Player_DXD Demo Pack',
+      album: 'Re:Zon Demo Pack',
       durationSec: 20,
       filePath: join(demoDir, f),
     }))

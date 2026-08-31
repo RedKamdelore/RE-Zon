@@ -39,7 +39,7 @@ describe('demoTracks', () => {
     expect(byFile.get('rainy-loops.wav')?.title).toBe('Rainy Loops')
     for (const t of tracks) {
       expect(t.sourceId).toBe('demo')
-      expect(t.album).toBe('Player_DXD Demo Pack')
+      expect(t.album).toBe('Re:Zon Demo Pack')
       expect(t.durationSec).toBe(20)
     }
   })

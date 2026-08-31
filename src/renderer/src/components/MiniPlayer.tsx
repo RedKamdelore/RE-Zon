@@ -27,7 +27,7 @@ export default function MiniPlayer({ onExpand }: MiniPlayerProps) {
         )}
       </div>
       <div className="mp-info">
-        <div className="mp-title">{track?.title ?? 'Player_DXD'}</div>
+        <div className="mp-title">{track?.title ?? 'Re:Zon'}</div>
         <div className="mp-artist">{track?.artist ?? 'Ничего не играет'}</div>
       </div>
       <div className={`mp-controls${disabled ? ' controls-disabled' : ''}`}>

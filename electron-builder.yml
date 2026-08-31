@@ -1,5 +1,5 @@
-appId: com.playerdxd.app
-productName: Player_DXD
+﻿appId: com.rezon.app
+productName: ReZon
 directories:
   output: release
 files:
@@ -16,4 +16,4 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  shortcutName: Player_DXD
+  shortcutName: ReZon

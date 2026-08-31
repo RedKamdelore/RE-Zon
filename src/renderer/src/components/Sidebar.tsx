@@ -52,7 +52,7 @@ export default function Sidebar({ view, onNavigate }: SidebarProps) {
       <div className="sidebar-card">
         <div className="brand">
           <span className="brand-dot" />
-          Player_DXD
+          Re:Zon
         </div>
         <button
           className={`nav-row${view.name === 'home' ? ' active' : ''}`}

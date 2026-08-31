@@ -11,7 +11,7 @@ export function createTray(win: BrowserWindow): void {
   // 512px иконку даунскейлим до 16px — иначе в трее Windows выглядит битой
   const icon = nativeImage.createFromPath(ICON_PATH).resize({ width: 16 })
   const tray = new Tray(icon)
-  tray.setToolTip('Player_DXD')
+  tray.setToolTip('Re:Zon')
 
   const send = (cmd: string): void => {
     win.webContents.send('player:cmd', cmd)
@@ -24,7 +24,7 @@ export function createTray(win: BrowserWindow): void {
       { label: 'Предыдущий трек', click: () => send('prev') },
       { type: 'separator' },
       {
-        label: 'Показать Player_DXD',
+        label: 'Показать Re:Zon',
         click: () => {
           win.show()
           win.focus()
