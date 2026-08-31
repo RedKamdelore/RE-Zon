@@ -32,6 +32,12 @@ export default function Sidebar({ view, onNavigate }: SidebarProps) {
     if (view.name === 'playlist' && view.id === id) onNavigate({ name: 'home' })
   }
 
+  const pickCover = async (id: string): Promise<void> => {
+    if (typeof window === 'undefined' || !window.api) return
+    const dataUrl = await window.api.pickCoverImage()
+    if (dataUrl) usePlaylistStore.getState().setCover(id, dataUrl)
+  }
+
   useEffect(() => {
     if (!menu) return
     const onKey = (e: KeyboardEvent): void => {
@@ -125,6 +131,16 @@ export default function Sidebar({ view, onNavigate }: SidebarProps) {
               }}
             >
               Переименовать
+            </button>
+            <button
+              className="ctx-item"
+              onClick={() => {
+                const id = menu.playlistId
+                setMenu(null)
+                void pickCover(id)
+              }}
+            >
+              Выбрать обложку
             </button>
             <button
               className="ctx-item"

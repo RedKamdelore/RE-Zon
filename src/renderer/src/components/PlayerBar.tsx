@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
+import { persistPatch } from '../stores/playlistStore'
 import { fmt } from '../utils/format'
 import {
   PlayIcon,
@@ -45,6 +46,12 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
 
   const track = order.length > 0 ? queue[order[pos]] : undefined
   const disabled = queue.length === 0
+
+  // Дебаунсированный persist громкости — паттерн как у Equalizer (eqGains)
+  const changeVolume = (v: number): void => {
+    setVolume(v)
+    persistPatch({ volume: usePlayerStore.getState().volume })
+  }
 
   return (
     <footer className="playerbar">
@@ -135,7 +142,7 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
           step={0.01}
           value={volume}
           style={progressStyle(volume, 1)}
-          onChange={(e) => setVolume(Number(e.target.value))}
+          onChange={(e) => changeVolume(Number(e.target.value))}
           title="Громкость"
         />
       </div>

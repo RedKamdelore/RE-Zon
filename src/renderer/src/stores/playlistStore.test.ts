@@ -93,6 +93,26 @@ describe('playlistStore', () => {
     expect(usePlaylistStore.getState().playlists[0].trackIds).toEqual(['local:t2'])
   })
 
+  it('setCover sets coverDataUrl and persists it debounced', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+    usePlaylistStore.getState().init([])
+
+    const id = usePlaylistStore.getState().create()
+    usePlaylistStore.getState().setCover(id, 'data:image/png;base64,AAAA')
+    expect(usePlaylistStore.getState().playlists[0].coverDataUrl).toBe(
+      'data:image/png;base64,AAAA',
+    )
+
+    vi.advanceTimersByTime(500)
+    expect(saveData).toHaveBeenCalledTimes(1)
+    const saved = saveData.mock.calls[0][0] as PersistedData
+    expect(saved.playlists[0].coverDataUrl).toBe('data:image/png;base64,AAAA')
+    expect(saved.musicFolders).toEqual(['C:\\Music'])
+  })
+
   it('persists debounced (500ms) merged with the persisted base', () => {
     vi.useFakeTimers()
     const saveData = vi.fn().mockResolvedValue(undefined)
@@ -146,6 +166,26 @@ describe('playlistStore', () => {
     expect(saved.eqGains).toEqual([12, 5, 0, 0, 0, 0, 0, 0, 0, 0])
     expect(saved.playlists).toEqual([pl])
     expect(saved.volume).toBe(0.8)
+  })
+
+  it('persistPatch merges volume debounced into the base (PlayerBar pattern)', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+
+    // Паттерн PlayerBar.changeVolume: серия движений слайдера — один saveData
+    persistPatch({ volume: 0.6 })
+    persistPatch({ volume: 0.4 })
+    persistPatch({ volume: 0.5 })
+    expect(saveData).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(500)
+    expect(saveData).toHaveBeenCalledTimes(1)
+    const saved = saveData.mock.calls[0][0] as PersistedData
+    expect(saved.volume).toBe(0.5)
+    expect(saved.musicFolders).toEqual(['C:\\Music'])
+    expect(saved.playlists).toEqual([])
   })
 
   it('mutations do not throw without window.api or persisted base', () => {

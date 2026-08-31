@@ -9,6 +9,7 @@ const api = {
   scanLibrary: (folders: string[]): Promise<Track[]> =>
     ipcRenderer.invoke('library:scan', folders),
   demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
+  pickCoverImage: (): Promise<string | null> => ipcRenderer.invoke('playlist:pickCover'),
   setMiniMode: (mini: boolean): Promise<void> => ipcRenderer.invoke('window:mini', mini),
   onPlayerCommand: (cb: (cmd: string) => void) => {
     const listener = (_e: IpcRendererEvent, cmd: string): void => cb(cmd)

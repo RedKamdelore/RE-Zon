@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPlayerStore, initPlayerSubscriptions, type PlayerEngine } from './playerStore'
 import { mediaUrl } from '../audio/engine'
 import type { Track } from '@shared/types'
@@ -170,6 +170,22 @@ describe('playerStore', () => {
     expect(s.order).toEqual([0, 1, 2, 3])
   })
 
+  it('enqueue onto empty queue preloads src; togglePlay then resumes with playing=true', () => {
+    store.getState().enqueue(TRACKS[0])
+    const s = store.getState()
+    expect(s.queue).toHaveLength(1)
+    expect(s.order).toEqual([0])
+    expect(s.pos).toBe(0)
+    expect(s.playing).toBe(false)
+    expect(calls.load).toEqual([mediaUrl(TRACKS[0].filePath)])
+    expect(calls.play).toHaveLength(0) // без autoplay
+
+    store.getState().togglePlay()
+    expect(store.getState().playing).toBe(true)
+    expect(calls.resume).toBe(1)
+    expect(calls.play).toHaveLength(0) // resume, а не play с новым URL
+  })
+
   it('removeFromQueue of an upcoming track shrinks queue and keeps current track', () => {
     store.getState().playTracks(TRACKS, 0)
     store.getState().removeFromQueue(2) // removes track3 (queue index 2)
@@ -334,6 +350,28 @@ describe('initPlayerSubscriptions', () => {
     fire('ended')
     expect(calls.play).toHaveLength(1) // no auto-next
     expect(store.getState().pos).toBe(0)
+  })
+
+  it('error event (deleted/moved file) auto-skips to the next track', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    fire('error')
+    expect(store.getState().pos).toBe(1)
+    expect(store.getState().playing).toBe(true)
+    expect(calls.play).toHaveLength(2)
+    expect(calls.play[1]).toBe(mediaUrl(TRACKS[1].filePath))
+    errSpy.mockRestore()
+  })
+
+  it('error event at the end with repeat off stops playback', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.getState().playTracks(TRACKS, 2)
+    initPlayerSubscriptions(engine, store)
+    fire('error')
+    expect(store.getState().playing).toBe(false)
+    expect(calls.play).toHaveLength(1) // ничего нового не загружено
+    errSpy.mockRestore()
   })
 })
 

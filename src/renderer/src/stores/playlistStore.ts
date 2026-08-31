@@ -16,6 +16,7 @@ interface PlaylistState {
   remove: (id: string) => void
   addTrack: (playlistId: string, trackId: string) => void
   removeTrack: (playlistId: string, index: number) => void
+  setCover: (id: string, coverDataUrl: string) => void
 }
 
 // --- Persisted base -------------------------------------------------------
@@ -111,5 +112,7 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => {
     addTrack: (playlistId, trackId) => mutate(playlistId, (p) => addTrackOp(p, trackId)),
 
     removeTrack: (playlistId, index) => mutate(playlistId, (p) => removeTrackOp(p, index)),
+
+    setCover: (id, coverDataUrl) => mutate(id, (p) => ({ ...p, coverDataUrl })),
   }
 })

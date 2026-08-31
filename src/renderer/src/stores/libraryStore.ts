@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { PersistedData, Track } from '@shared/types'
-import { getPersistedBase } from './playlistStore'
+import { getPersistedBase, setPersistedBase } from './playlistStore'
 
 interface LibraryState {
   tracks: Track[]
@@ -43,7 +43,11 @@ export const useLibraryStore = create<LibraryState>()((set) => ({
     // База из памяти (см. playlistStore) — без лишнего чтения диска; fallback на loadData
     const data = getPersistedBase() ?? (await window.api.loadData())
     const musicFolders = [...new Set([...data.musicFolders, folder])]
-    await window.api.saveData({ ...data, musicFolders })
+    const updated = { ...data, musicFolders }
+    await window.api.saveData(updated)
+    // Обновляем базу в памяти: иначе следующий дебаунсированный persist
+    // (playlists/lyrics/EQ/volume) мержится в старую базу и затирает musicFolders
+    setPersistedBase(updated)
     set({ loading: true })
     const tracks = await window.api.scanLibrary(musicFolders)
     set({ tracks, usingDemo: false, loading: false })

@@ -156,6 +156,12 @@ export function createPlayerStore(engine: PlayerEngine) {
     enqueue: (track) => {
       const { queue, order } = get()
       set({ queue: [...queue, track], order: [...order, queue.length] })
+      if (queue.length === 0) {
+        // Очередь была пуста: предзагружаем src (без autoplay), иначе
+        // togglePlay() делал бы resume на пустом элементе — Play «играл» тишину
+        engine.load(mediaUrl(track.filePath))
+        set({ pos: 0, currentSec: 0 })
+      }
     },
 
     // Упрощённая семантика: после удаления order перестраивается как identity
@@ -249,6 +255,16 @@ export function initPlayerSubscriptions(
     'ended',
     () => {
       store.getState().next() // auto-advance
+    },
+    { signal },
+  )
+  engine.element.addEventListener(
+    'error',
+    () => {
+      // Файл удалён/перемещён: без обработчика плеер вечно «играет» мёртвый src,
+      // а auto-advance умирает. Пропускаем трек с auto-семантикой (учитывает repeat).
+      console.error('audio error, skipping:', engine.element.currentSrc || engine.element.src)
+      store.getState().next()
     },
     { signal },
   )
