@@ -1,5 +1,5 @@
 import { app, BrowserWindow, protocol, net } from 'electron'
-import { join } from 'path'
+import { join, extname } from 'path'
 import { pathToFileURL } from 'url'
 import { registerIpc } from './ipc'
 import { createTray } from './tray'
@@ -9,9 +9,10 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'media', privileges: { stream: true, supportFetchAPI: true } },
 ])
 
+const ALLOWED_MEDIA_EXT = new Set(['.mp3', '.flac', '.ogg', '.wav', '.m4a', '.opus'])
+
 function decodeMediaUrl(url: string): string {
-  const encoded = new URL(url).hostname + new URL(url).pathname
-  return Buffer.from(encoded, 'base64url').toString('utf-8')
+  return Buffer.from(url.slice('media://'.length), 'base64url').toString('utf-8')
 }
 
 function createWindow(): BrowserWindow {
@@ -34,9 +35,20 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-  protocol.handle('media', (req) =>
-    net.fetch(pathToFileURL(decodeMediaUrl(req.url)).toString()),
-  )
+  protocol.handle('media', (req) => {
+    try {
+      const filePath = decodeMediaUrl(req.url)
+      // Прагматичный уровень защиты: allowlist по расширению, а не по списку
+      // отсканированных файлов — иначе воспроизведение ломалось бы после
+      // рестарта приложения до повторного сканирования библиотеки.
+      if (!ALLOWED_MEDIA_EXT.has(extname(filePath).toLowerCase())) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      return net.fetch(pathToFileURL(filePath).toString())
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
   const win = createWindow()
   registerIpc(win)
   createTray(win)

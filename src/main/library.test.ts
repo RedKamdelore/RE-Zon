@@ -1,0 +1,44 @@
+import { describe, it, expect } from 'vitest'
+import { fileURLToPath } from 'url'
+import { join } from 'path'
+import { scanFolders, demoTracks } from './library'
+
+const DEMO_DIR = fileURLToPath(new URL('../../resources/demo', import.meta.url))
+
+describe('scanFolders', () => {
+  it('сканирует демо-WAV с фолбэк-метаданными', async () => {
+    const tracks = await scanFolders([DEMO_DIR])
+    expect(tracks).toHaveLength(4)
+    // wav не несёт тегов → title = имя файла без расширения
+    expect(tracks.map(t => t.title).sort()).toEqual(
+      ['analog-dreams', 'neon-sunset', 'night-drive', 'rainy-loops'],
+    )
+    for (const t of tracks) {
+      expect(t.sourceId).toBe('local')
+      expect(t.artist).toBe('Неизвестный исполнитель')
+      expect(t.album).toBe('Неизвестный альбом')
+      expect(t.durationSec).toBeGreaterThanOrEqual(18)
+      expect(t.durationSec).toBeLessThanOrEqual(22)
+      expect(t.coverDataUrl).toBeUndefined()
+    }
+  })
+
+  it('толерантен к несуществующим папкам', async () => {
+    await expect(scanFolders([join(DEMO_DIR, 'no-such-dir')])).resolves.toEqual([])
+  })
+})
+
+describe('demoTracks', () => {
+  it('возвращает 4 демо-трека с именами из пакета', () => {
+    const tracks = demoTracks(DEMO_DIR)
+    expect(tracks).toHaveLength(4)
+    expect(tracks.map(t => t.title).sort()).toEqual(
+      ['Analog Dreams', 'Neon Sunset', 'Night Drive', 'Rainy Loops'],
+    )
+    for (const t of tracks) {
+      expect(t.sourceId).toBe('demo')
+      expect(t.album).toBe('Player_DXD Demo Pack')
+      expect(t.durationSec).toBe(20)
+    }
+  })
+})

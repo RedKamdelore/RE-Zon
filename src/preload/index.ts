@@ -7,6 +7,7 @@ const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('library:pickFolder'),
   scanLibrary: (folders: string[]): Promise<Track[]> =>
     ipcRenderer.invoke('library:scan', folders),
+  demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
   setMiniMode: (mini: boolean): Promise<void> => ipcRenderer.invoke('window:mini', mini),
   onPlayerCommand: (cb: (cmd: string) => void) => {
     ipcRenderer.on('player:cmd', (_e, cmd) => cb(cmd))
