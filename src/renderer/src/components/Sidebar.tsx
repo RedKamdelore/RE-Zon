@@ -1,14 +1,46 @@
-import type { Playlist } from '@shared/types'
+import { useEffect, useRef, useState } from 'react'
 import type { View } from '../App'
+import { usePlaylistStore } from '../stores/playlistStore'
 import { HomeIcon, SearchIcon, PlusIcon, MusicNoteIcon } from './icons'
 
 interface SidebarProps {
-  playlists: Playlist[]
   view: View
   onNavigate: (view: View) => void
 }
 
-export default function Sidebar({ playlists, view, onNavigate }: SidebarProps) {
+interface MenuState {
+  x: number
+  y: number
+  playlistId: string
+}
+
+export default function Sidebar({ view, onNavigate }: SidebarProps) {
+  const playlists = usePlaylistStore((s) => s.playlists)
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+
+  const createPlaylist = (): void => {
+    const id = usePlaylistStore.getState().create()
+    onNavigate({ name: 'playlist', id })
+  }
+
+  const removePlaylist = (id: string): void => {
+    const pl = playlists.find((p) => p.id === id)
+    if (!pl) return
+    if (!window.confirm(`Удалить плейлист «${pl.name}»?`)) return
+    usePlaylistStore.getState().remove(id)
+    if (view.name === 'playlist' && view.id === id) onNavigate({ name: 'home' })
+  }
+
+  useEffect(() => {
+    if (!menu) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenu(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [menu])
+
   return (
     <aside className="sidebar">
       <div className="sidebar-card">
@@ -35,11 +67,7 @@ export default function Sidebar({ playlists, view, onNavigate }: SidebarProps) {
       <div className="sidebar-card library">
         <div className="library-header">
           <span>Моя медиатека</span>
-          <button
-            className="icon-btn"
-            title="Создать плейлист"
-            onClick={() => console.log('create playlist — Task 11')}
-          >
+          <button className="icon-btn" title="Создать плейлист" onClick={createPlaylist}>
             <PlusIcon size={20} />
           </button>
         </div>
@@ -47,27 +75,105 @@ export default function Sidebar({ playlists, view, onNavigate }: SidebarProps) {
           {playlists.length === 0 ? (
             <div className="empty-state">Создайте свой первый плейлист</div>
           ) : (
-            playlists.map((pl) => (
-              <button
-                key={pl.id}
-                className={`playlist-row${
-                  view.name === 'playlist' && view.id === pl.id ? ' active' : ''
-                }`}
-                onClick={() => onNavigate({ name: 'playlist', id: pl.id })}
-              >
-                <span className="playlist-cover">
-                  {pl.coverDataUrl ? (
-                    <img src={pl.coverDataUrl} alt="" />
-                  ) : (
-                    <MusicNoteIcon size={20} />
-                  )}
-                </span>
-                {pl.name}
-              </button>
-            ))
+            playlists.map((pl) =>
+              renamingId === pl.id ? (
+                <RenameRow
+                  key={pl.id}
+                  initial={pl.name}
+                  onCommit={(name) => {
+                    if (name) usePlaylistStore.getState().rename(pl.id, name)
+                    setRenamingId(null)
+                  }}
+                  onCancel={() => setRenamingId(null)}
+                />
+              ) : (
+                <button
+                  key={pl.id}
+                  className={`playlist-row${
+                    view.name === 'playlist' && view.id === pl.id ? ' active' : ''
+                  }`}
+                  onClick={() => onNavigate({ name: 'playlist', id: pl.id })}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setMenu({ x: e.clientX, y: e.clientY, playlistId: pl.id })
+                  }}
+                >
+                  <span className="playlist-cover">
+                    {pl.coverDataUrl ? (
+                      <img src={pl.coverDataUrl} alt="" />
+                    ) : (
+                      <MusicNoteIcon size={20} />
+                    )}
+                  </span>
+                  {pl.name}
+                </button>
+              ),
+            )
           )}
         </div>
       </div>
+
+      {menu && (
+        <>
+          <div className="ctx-overlay" onClick={() => setMenu(null)} onContextMenu={() => setMenu(null)} />
+          <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
+            <button
+              className="ctx-item"
+              onClick={() => {
+                setRenamingId(menu.playlistId)
+                setMenu(null)
+              }}
+            >
+              Переименовать
+            </button>
+            <button
+              className="ctx-item"
+              onClick={() => {
+                const id = menu.playlistId
+                setMenu(null)
+                removePlaylist(id)
+              }}
+            >
+              Удалить
+            </button>
+          </div>
+        </>
+      )}
     </aside>
+  )
+}
+
+/** Строка инлайн-переименования: Enter/blur — commit (пустое имя не коммитится), Escape — отмена */
+function RenameRow({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string
+  onCommit: (name: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initial)
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    ref.current?.focus()
+    ref.current?.select()
+  }, [])
+
+  return (
+    <div className="playlist-row renaming">
+      <input
+        ref={ref}
+        className="rename-input"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => onCommit(value.trim())}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onCommit(value.trim())
+          if (e.key === 'Escape') onCancel()
+        }}
+      />
+    </div>
   )
 }

@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Playlist, Track } from '@shared/types'
 import { usePlayerStore } from '../stores/playerStore'
+import { usePlaylistStore } from '../stores/playlistStore'
 import { plural } from '../utils/plural'
 import TrackList from './TrackList'
 import { PlayIcon, MusicNoteIcon } from './icons'
@@ -10,11 +12,21 @@ interface PlaylistViewProps {
 }
 
 export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
+  const [renaming, setRenaming] = useState(false)
+
   const byId = new Map(tracks.map((t) => [t.id, t]))
   // Порядок trackIds сохраняется; id, отсутствующие в библиотеке, пропускаются
   const resolved = playlist.trackIds
     .map((id) => byId.get(id))
     .filter((t): t is Track => t !== undefined)
+
+  // resolved[i] — не всегда trackIds[i] (могли отфильтроваться отсутствующие треки),
+  // поэтому индекс в trackIds ищем по id (addTrack дедуплицирует, id уникален)
+  const removeAt = (resolvedIndex: number): void => {
+    const track = resolved[resolvedIndex]
+    const idx = playlist.trackIds.indexOf(track.id)
+    if (idx >= 0) usePlaylistStore.getState().removeTrack(playlist.id, idx)
+  }
 
   return (
     <>
@@ -28,7 +40,24 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
         </div>
         <div className="pl-header-text">
           <div className="pl-label">ПЛЕЙЛИСТ</div>
-          <div className="pl-name">{playlist.name}</div>
+          {renaming ? (
+            <RenameInput
+              initial={playlist.name}
+              onCommit={(name) => {
+                if (name) usePlaylistStore.getState().rename(playlist.id, name)
+                setRenaming(false)
+              }}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : (
+            <div
+              className="pl-name editable"
+              title="Нажмите, чтобы переименовать"
+              onClick={() => setRenaming(true)}
+            >
+              {playlist.name}
+            </div>
+          )}
           <div className="pl-meta">
             {resolved.length} {plural(resolved.length, 'трек', 'трека', 'треков')}
           </div>
@@ -45,8 +74,41 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
       {resolved.length === 0 ? (
         <p className="muted">В этом плейлисте пока нет треков</p>
       ) : (
-        <TrackList tracks={resolved} />
+        <TrackList tracks={resolved} onRemoveTrack={removeAt} />
       )}
     </>
+  )
+}
+
+/** Enter/blur — commit (пустое имя не коммитится), Escape — отмена */
+function RenameInput({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string
+  onCommit: (name: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initial)
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    ref.current?.focus()
+    ref.current?.select()
+  }, [])
+
+  return (
+    <input
+      ref={ref}
+      className="pl-name-input"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value.trim())}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(value.trim())
+        if (e.key === 'Escape') onCancel()
+      }}
+    />
   )
 }

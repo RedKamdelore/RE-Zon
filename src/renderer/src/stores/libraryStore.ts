@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import type { Track } from '@shared/types'
+import type { PersistedData, Track } from '@shared/types'
+import { getPersistedBase } from './playlistStore'
 
 interface LibraryState {
   tracks: Track[]
   loading: boolean
   usingDemo: boolean
-  init: () => Promise<void> // loadData → folders? scanLibrary : demoLibrary
+  init: (data?: PersistedData) => Promise<void> // data из App (единый loadData); без него — сам грузит
   addFolder: () => Promise<void> // pickFolder → persist musicFolders → rescan
 }
 
@@ -14,19 +15,19 @@ export const useLibraryStore = create<LibraryState>()((set) => ({
   loading: true,
   usingDemo: false,
 
-  init: async () => {
+  init: async (data) => {
     // Guard: plain browser dev без preload — window.api отсутствует
     if (typeof window === 'undefined' || !window.api) {
       set({ loading: false })
       return
     }
     try {
-      const data = await window.api.loadData()
-      if (data.musicFolders.length === 0) {
+      const d = data ?? (await window.api.loadData())
+      if (d.musicFolders.length === 0) {
         const tracks = await window.api.demoLibrary()
         set({ tracks, usingDemo: true, loading: false })
       } else {
-        const tracks = await window.api.scanLibrary(data.musicFolders)
+        const tracks = await window.api.scanLibrary(d.musicFolders)
         set({ tracks, usingDemo: false, loading: false })
       }
     } catch (e) {
@@ -39,7 +40,8 @@ export const useLibraryStore = create<LibraryState>()((set) => ({
     if (typeof window === 'undefined' || !window.api) return
     const folder = await window.api.pickFolder()
     if (!folder) return
-    const data = await window.api.loadData()
+    // База из памяти (см. playlistStore) — без лишнего чтения диска; fallback на loadData
+    const data = getPersistedBase() ?? (await window.api.loadData())
     const musicFolders = [...new Set([...data.musicFolders, folder])]
     await window.api.saveData({ ...data, musicFolders })
     set({ loading: true })

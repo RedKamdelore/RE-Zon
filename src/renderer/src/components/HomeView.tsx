@@ -1,12 +1,9 @@
-import type { Playlist, Track } from '@shared/types'
+import type { Track } from '@shared/types'
 import { useLibraryStore } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
+import { usePlaylistStore } from '../stores/playlistStore'
 import TrackList from './TrackList'
 import { PlayIcon, MusicNoteIcon } from './icons'
-
-interface HomeViewProps {
-  playlists: Playlist[]
-}
 
 interface Tile {
   id: string
@@ -39,11 +36,12 @@ function deriveAlbums(tracks: Track[]): Tile[] {
   }))
 }
 
-export default function HomeView({ playlists }: HomeViewProps) {
+export default function HomeView() {
   const tracks = useLibraryStore((s) => s.tracks)
   const loading = useLibraryStore((s) => s.loading)
   const usingDemo = useLibraryStore((s) => s.usingDemo)
   const addFolder = useLibraryStore((s) => s.addFolder)
+  const playlists = usePlaylistStore((s) => s.playlists)
 
   const playlistTiles: Tile[] = playlists.slice(0, 6).map((pl) => {
     const byId = new Map(tracks.map((t) => [t.id, t]))

@@ -1,35 +1,40 @@
 import { useEffect, useState } from 'react'
 import type { Track } from '@shared/types'
 import { usePlayerStore } from '../stores/playerStore'
+import { usePlaylistStore } from '../stores/playlistStore'
 import { fmt } from '../utils/format'
 import { PlayIcon, ClockIcon, MusicNoteIcon } from './icons'
 
 interface TrackListProps {
   tracks: Track[]
   onPlay?: (tracks: Track[], index: number) => void // default: playerStore.playTracks
-  onAddToPlaylist?: (track: Track) => void // Task 11 подключает реальное поведение
+  onRemoveTrack?: (index: number) => void // если задан — в меню появляется «Удалить из плейлиста»
 }
 
 interface MenuState {
   x: number
   y: number
   track: Track
+  index: number
 }
 
 /** Кастомное контекстное меню (не нативное) — локально для TrackList */
 function ContextMenu({
   menu,
-  hasAddToPlaylist,
+  hasRemove,
   onEnqueue,
-  onAddToPlaylist,
+  onRemove,
   onClose,
 }: {
   menu: MenuState
-  hasAddToPlaylist: boolean
+  hasRemove: boolean
   onEnqueue: (track: Track) => void
-  onAddToPlaylist: (track: Track) => void
+  onRemove: (index: number) => void
   onClose: () => void
 }) {
+  const playlists = usePlaylistStore((s) => s.playlists)
+  const [pickerOpen, setPickerOpen] = useState(false)
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -51,23 +56,44 @@ function ContextMenu({
         >
           Добавить в очередь
         </button>
-        {hasAddToPlaylist && (
-          <button
-            className="ctx-item"
-            onClick={() => {
-              onAddToPlaylist(menu.track)
-              onClose()
-            }}
-          >
+        {playlists.length > 0 && (
+          <button className="ctx-item" onClick={() => setPickerOpen((v) => !v)}>
             Добавить в плейлист
           </button>
         )}
+        {hasRemove && (
+          <button
+            className="ctx-item"
+            onClick={() => {
+              onRemove(menu.index)
+              onClose()
+            }}
+          >
+            Удалить из плейлиста
+          </button>
+        )}
       </div>
+      {pickerOpen && (
+        <div className="ctx-menu ctx-submenu" style={{ left: menu.x + 188, top: menu.y }}>
+          {playlists.map((pl) => (
+            <button
+              key={pl.id}
+              className="ctx-item"
+              onClick={() => {
+                usePlaylistStore.getState().addTrack(pl.id, menu.track.id)
+                onClose()
+              }}
+            >
+              {pl.name}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   )
 }
 
-export default function TrackList({ tracks, onPlay, onAddToPlaylist }: TrackListProps) {
+export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListProps) {
   const currentTrackId = usePlayerStore((s) =>
     s.order.length > 0 ? s.queue[s.order[s.pos]]?.id : undefined,
   )
@@ -96,7 +122,7 @@ export default function TrackList({ tracks, onPlay, onAddToPlaylist }: TrackList
           onClick={() => play(tracks, i)}
           onContextMenu={(e) => {
             e.preventDefault()
-            setMenu({ x: e.clientX, y: e.clientY, track: t })
+            setMenu({ x: e.clientX, y: e.clientY, track: t, index: i })
           }}
         >
           <span className="tl-num-wrap">
@@ -123,9 +149,9 @@ export default function TrackList({ tracks, onPlay, onAddToPlaylist }: TrackList
       {menu && (
         <ContextMenu
           menu={menu}
-          hasAddToPlaylist={onAddToPlaylist !== undefined}
+          hasRemove={onRemoveTrack !== undefined}
           onEnqueue={(track) => usePlayerStore.getState().enqueue(track)}
-          onAddToPlaylist={(track) => onAddToPlaylist?.(track)}
+          onRemove={(index) => onRemoveTrack?.(index)}
           onClose={() => setMenu(null)}
         />
       )}

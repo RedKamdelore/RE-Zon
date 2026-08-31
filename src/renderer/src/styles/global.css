@@ -490,6 +490,35 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* Второй уровень меню — выбор плейлиста */
+.ctx-submenu {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Инлайн-переименование плейлиста (сайдбар и шапка плейлиста) */
+.rename-input,
+.pl-name-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--accent, #1db954);
+  border-radius: 4px;
+  background: #121212;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.pl-name-input {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.pl-name.editable {
+  cursor: text;
+}
+
 /* --- Home: плитки «Добрый день» --- */
 .btn-outline {
   padding: 8px 20px;

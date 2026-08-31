@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { Playlist } from '@shared/types'
 import Sidebar from './components/Sidebar'
 import PlayerBar, { type Panel } from './components/PlayerBar'
 import HomeView from './components/HomeView'
@@ -7,26 +6,32 @@ import SearchView from './components/SearchView'
 import PlaylistView from './components/PlaylistView'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore } from './stores/libraryStore'
+import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 
 export type View = { name: 'home' } | { name: 'search' } | { name: 'playlist'; id: string }
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
-  const [playlists, setPlaylists] = useState<Playlist[]>([])
+  const playlists = usePlaylistStore((s) => s.playlists)
   const tracks = useLibraryStore((s) => s.tracks)
 
   useEffect(() => {
     const unsubscribe = initPlayerSubscriptions()
-    void useLibraryStore.getState().init()
     if (window.api) {
+      // Единственный loadData на старте: результат раздаётся всем сторам,
+      // полный снимок сохраняется как база для дебаунсированных saveData
       window.api
         .loadData()
         .then((data) => {
+          setPersistedBase(data)
+          usePlaylistStore.getState().init(data.playlists)
           usePlayerStore.getState().setVolume(data.volume)
           usePlayerStore.getState().applyEqPreset(data.eqGains)
-          setPlaylists(data.playlists)
+          void useLibraryStore.getState().init(data)
         })
         .catch((e) => console.error('loadData failed:', e))
+    } else {
+      void useLibraryStore.getState().init()
     }
     return unsubscribe
   }, [])
@@ -38,15 +43,15 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar playlists={playlists} view={view} onNavigate={setView} />
+      <Sidebar view={view} onNavigate={setView} />
       <main className="main">
-        {view.name === 'home' && <HomeView playlists={playlists} />}
+        {view.name === 'home' && <HomeView />}
         {view.name === 'search' && <SearchView />}
         {view.name === 'playlist' &&
           (playlist ? (
             <PlaylistView playlist={playlist} tracks={tracks} />
           ) : (
-            <HomeView playlists={playlists} />
+            <HomeView />
           ))}
       </main>
       <PlayerBar onTogglePanel={onTogglePanel} />
