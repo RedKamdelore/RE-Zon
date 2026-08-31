@@ -3,6 +3,7 @@ import type { Playlist } from '@shared/types'
 import Sidebar from './components/Sidebar'
 import PlayerBar, { type Panel } from './components/PlayerBar'
 import HomeView from './components/HomeView'
+import SearchView from './components/SearchView'
 import PlaylistView from './components/PlaylistView'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore } from './stores/libraryStore'
@@ -40,12 +41,7 @@ export default function App() {
       <Sidebar playlists={playlists} view={view} onNavigate={setView} />
       <main className="main">
         {view.name === 'home' && <HomeView playlists={playlists} />}
-        {view.name === 'search' && (
-          <>
-            <h1>Поиск</h1>
-            <p className="muted">Поиск появится в следующем обновлении</p>
-          </>
-        )}
+        {view.name === 'search' && <SearchView />}
         {view.name === 'playlist' &&
           (playlist ? (
             <PlaylistView playlist={playlist} tracks={tracks} />

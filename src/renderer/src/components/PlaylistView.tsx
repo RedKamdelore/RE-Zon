@@ -1,5 +1,6 @@
 import type { Playlist, Track } from '@shared/types'
 import { usePlayerStore } from '../stores/playerStore'
+import { plural } from '../utils/plural'
 import TrackList from './TrackList'
 import { PlayIcon, MusicNoteIcon } from './icons'
 
@@ -28,7 +29,9 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
         <div className="pl-header-text">
           <div className="pl-label">ПЛЕЙЛИСТ</div>
           <div className="pl-name">{playlist.name}</div>
-          <div className="pl-meta">{resolved.length} треков</div>
+          <div className="pl-meta">
+            {resolved.length} {plural(resolved.length, 'трек', 'трека', 'треков')}
+          </div>
         </div>
       </div>
       <button
