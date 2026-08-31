@@ -5,6 +5,7 @@ import RightPanel from './components/RightPanel'
 import HomeView from './components/HomeView'
 import SearchView from './components/SearchView'
 import PlaylistView from './components/PlaylistView'
+import MiniPlayer from './components/MiniPlayer'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
@@ -40,17 +41,44 @@ export default function App() {
   }, [])
 
   // Правая панель: очередь / текст / эквалайзер (Task 12–13);
-  // повторный клик по активной кнопке закрывает панель, 'mini' — Task 14
+  // повторный клик по активной кнопке закрывает панель, 'mini' — мини-плеер
   const [panel, setPanel] = useState<null | 'queue' | 'lyrics' | 'eq'>(null)
+  const [mini, setMini] = useState(false)
+
+  const setMiniMode = async (value: boolean): Promise<void> => {
+    if (!window.api) return
+    await window.api.setMiniMode(value)
+    setMini(value)
+  }
+
   const onTogglePanel = (p: Panel): void => {
     if (p === 'mini') {
-      console.log('mini player — Task 14')
+      void setMiniMode(true)
       return
     }
     setPanel((prev) => (prev === p ? null : p))
   }
 
+  // Команды из трея (player:cmd): toggle / next / prev
+  useEffect(() => {
+    if (!window.api) return
+    return window.api.onPlayerCommand((cmd) => {
+      const p = usePlayerStore.getState()
+      if (cmd === 'toggle') p.togglePlay()
+      if (cmd === 'next') p.next({ manual: true })
+      if (cmd === 'prev') p.prev()
+    })
+  }, [])
+
   const playlist = view.name === 'playlist' ? playlists.find((p) => p.id === view.id) : undefined
+
+  if (mini) {
+    return (
+      <div className="app mini">
+        <MiniPlayer onExpand={() => void setMiniMode(false)} />
+      </div>
+    )
+  }
 
   return (
     <div className={`app${panel ? ' panel-open' : ''}`}>

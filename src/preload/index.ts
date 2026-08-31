@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 import type { PersistedData, Track } from '../shared/types'
 
 const api = {
@@ -10,7 +11,11 @@ const api = {
   demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
   setMiniMode: (mini: boolean): Promise<void> => ipcRenderer.invoke('window:mini', mini),
   onPlayerCommand: (cb: (cmd: string) => void) => {
-    ipcRenderer.on('player:cmd', (_e, cmd) => cb(cmd))
+    const listener = (_e: IpcRendererEvent, cmd: string): void => cb(cmd)
+    ipcRenderer.on('player:cmd', listener)
+    return (): void => {
+      ipcRenderer.removeListener('player:cmd', listener)
+    }
   },
 }
 
