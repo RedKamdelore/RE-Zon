@@ -6,10 +6,16 @@ import { createTray } from './tray'
 
 // Декодирует media://<base64url путь> → file stream
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'media', privileges: { stream: true, supportFetchAPI: true } },
+  // corsEnabled обязателен: в packaged-режиме origin рендерера file://,
+  // и fetch на media:// без этого флага блокируется CORS-проверкой схемы.
+  { scheme: 'media', privileges: { stream: true, supportFetchAPI: true, corsEnabled: true, secure: true } },
 ])
 
 const ALLOWED_MEDIA_EXT = new Set(['.mp3', '.flac', '.ogg', '.wav', '.m4a', '.opus'])
+
+// Фиксируем userData на player-dxd независимо от productName сборки,
+// чтобы dev- и packaged-версии делили одни и те же данные.
+app.setPath('userData', join(app.getPath('appData'), 'player-dxd'))
 
 function decodeMediaUrl(url: string): string {
   return Buffer.from(url.slice('media://'.length), 'base64url').toString('utf-8')
