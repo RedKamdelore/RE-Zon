@@ -81,6 +81,18 @@ describe('playerStore', () => {
     expect(calls.play[0].startsWith('media://')).toBe(true)
   })
 
+  it('playTracks passes http(s) stream URLs to the engine untouched (no media://)', () => {
+    const vkTrack: Track = {
+      ...makeTrack(9),
+      id: 'vk:1',
+      sourceId: 'vk',
+      filePath: 'https://cs9-5v4.vkuseraudio.net/p1/abc/audio.mp3?extra=1',
+    }
+    store.getState().playTracks([vkTrack], 0)
+    expect(calls.play[0]).toBe(vkTrack.filePath)
+    expect(calls.play[0].startsWith('media://')).toBe(false)
+  })
+
   it('next auto at end with repeat off stops playing', () => {
     store.getState().playTracks(TRACKS, 2)
     store.getState().next()

@@ -186,3 +186,11 @@ export function mediaUrl(filePath: string): string {
   for (const b of bytes) bin += String.fromCharCode(b)
   return `media://${btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`
 }
+
+/**
+ * URL воспроизведения трека: http(s)-потоки (VK и др.) идут напрямую,
+ * локальные пути — через media:// (см. main/index.ts protocol.handle).
+ */
+export function resolveTrackUrl(track: { filePath: string }): string {
+  return track.filePath.startsWith('http') ? track.filePath : mediaUrl(track.filePath)
+}

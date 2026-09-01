@@ -20,6 +20,23 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
   }
 }
 
+describe('libraryStore.addTracks', () => {
+  beforeEach(() => {
+    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+  })
+
+  it('appends new tracks and dedupes by id', () => {
+    const t = (id: string): Track => ({
+      id, sourceId: 'vk', title: 'T', artist: 'A', album: 'VK', durationSec: 1, filePath: 'https://x/a.mp3',
+    })
+    useLibraryStore.getState().addTracks([t('vk:1'), t('vk:2')])
+    expect(useLibraryStore.getState().tracks.map((x) => x.id)).toEqual(['vk:1', 'vk:2'])
+    // повторный импорт не плодит дубликаты
+    useLibraryStore.getState().addTracks([t('vk:2'), t('vk:3')])
+    expect(useLibraryStore.getState().tracks.map((x) => x.id)).toEqual(['vk:1', 'vk:2', 'vk:3'])
+  })
+})
+
 describe('libraryStore.addFolder', () => {
   beforeEach(() => {
     useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })

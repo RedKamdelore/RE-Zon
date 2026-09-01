@@ -3,7 +3,9 @@ import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
 import { loadData, saveData } from './persistence'
 import { scanFolders, demoTracks } from './library'
+import { vkAudioGet } from './vk'
 import type { PersistedData } from '../shared/types'
+import type { VkImportResult } from '../shared/matching'
 
 const COVER_MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -26,6 +28,13 @@ export function registerIpc(win: BrowserWindow): void {
   })
   ipcMain.handle('library:scan', (_e, folders: string[]) => scanFolders(folders))
   ipcMain.handle('library:demo', () => demoTracks(DEMO_DIR))
+  ipcMain.handle('vk:import', async (_e, token: string): Promise<VkImportResult> => {
+    try {
+      return { ok: true, tracks: await vkAudioGet(token) }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
   ipcMain.handle('playlist:pickCover', async () => {
     const r = await dialog.showOpenDialog(win, {
       properties: ['openFile'],

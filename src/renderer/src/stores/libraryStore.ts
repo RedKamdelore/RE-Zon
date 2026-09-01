@@ -9,12 +9,21 @@ interface LibraryState {
   init: (data?: PersistedData) => Promise<void> // data из App (единый loadData); без него — сам грузит
   addFolder: () => Promise<void> // pickFolder → persist musicFolders → rescan
   removeFolder: (folder: string) => Promise<void> // persist без папки → rescan (пусто → демо)
+  addTracks: (tracks: Track[]) => void // внешние треки (VK и др.): дописывает, дедуп по id
 }
 
 export const useLibraryStore = create<LibraryState>()((set) => ({
   tracks: [],
   loading: true,
   usingDemo: false,
+
+  addTracks: (incoming) => {
+    set((state) => {
+      const known = new Set(state.tracks.map((t) => t.id))
+      const fresh = incoming.filter((t) => !known.has(t.id))
+      return fresh.length > 0 ? { tracks: [...state.tracks, ...fresh] } : {}
+    })
+  },
 
   init: async (data) => {
     // Guard: plain browser dev без preload — window.api отсутствует

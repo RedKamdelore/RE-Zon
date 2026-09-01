@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Track, RepeatMode } from '@shared/types'
 import { nextIndex, prevIndex, buildShuffleOrder } from '@shared/queue'
-import { AudioEngine, mediaUrl, clampVolume } from '../audio/engine'
+import { AudioEngine, resolveTrackUrl, clampVolume } from '../audio/engine'
 import { useSettingsStore } from './settingsStore'
 import { recordPlay } from './statsStore'
 
@@ -63,7 +63,7 @@ export function createPlayerStore(
   let crossfadeDone = false
   const playAt = (state: Pick<PlayerState, 'queue' | 'order'>, pos: number): void => {
     const track = state.queue[state.order[pos]]
-    engine.play(mediaUrl(track.filePath))
+    engine.play(resolveTrackUrl(track))
     // Статистика прослушиваний: пишем именно в точке реального старта трека
     // (playTracks/next/prev). Кроссфейд-пути зовут recordPlay сами (см. ниже).
     recordPlay(track.id)
@@ -121,7 +121,7 @@ export function createPlayerStore(
       const xfSec = opts?.manual && get().playing ? getCrossfadeSec() : 0
       set({ pos: nextPos, currentSec: 0, playing: true })
       if (xfSec > 0 && engine.crossfadeTo) {
-        engine.crossfadeTo(mediaUrl(queue[order[nextPos]].filePath), xfSec)
+        engine.crossfadeTo(resolveTrackUrl(queue[order[nextPos]]), xfSec)
         recordPlay(queue[order[nextPos]].id)
         return
       }
@@ -191,7 +191,7 @@ export function createPlayerStore(
       if (queue.length === 0) {
         // Очередь была пуста: предзагружаем src (без autoplay), иначе
         // togglePlay() делал бы resume на пустом элементе — Play «играл» тишину
-        engine.load(mediaUrl(track.filePath))
+        engine.load(resolveTrackUrl(track))
         set({ pos: 0, currentSec: 0 })
       }
     },
@@ -239,7 +239,7 @@ export function createPlayerStore(
       const newOrder = identityOrder(newQueue.length)
       if (removedQueueIndex === playingQueueIndex) {
         engine.pause()
-        engine.load(newQueue.length > 0 ? mediaUrl(newQueue[0].filePath) : '')
+        engine.load(newQueue.length > 0 ? resolveTrackUrl(newQueue[0]) : '')
         set({ queue: newQueue, order: newOrder, pos: 0, playing: false, currentSec: 0, shuffle: false })
       } else {
         const newPos = playingQueueIndex > removedQueueIndex ? playingQueueIndex - 1 : playingQueueIndex
@@ -280,7 +280,7 @@ export function createPlayerStore(
       if (nextPos === null) return // конец очереди при repeat off — доигрываем до ended
       crossfadeDone = true
       set({ pos: nextPos, currentSec: 0, playing: true })
-      engine.crossfadeTo(mediaUrl(queue[order[nextPos]].filePath), xfSec)
+      engine.crossfadeTo(resolveTrackUrl(queue[order[nextPos]]), xfSec)
       recordPlay(queue[order[nextPos]].id)
     },
   }))

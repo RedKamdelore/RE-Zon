@@ -3,6 +3,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { getPersistedBase } from '../stores/playlistStore'
 import { CloseIcon } from './icons'
+import ImportSection from './ImportSection'
 
 const SKINS: { id: string; name: string; gradient: string }[] = [
   { id: 'spotify-dark', name: 'Spotify Dark', gradient: 'linear-gradient(135deg, #121212 60%, #1DB954)' },
@@ -129,6 +130,8 @@ export default function SettingsView() {
           onChange={(e) => s().setLastfmKey(e.target.value)}
         />
       </section>
+
+      <ImportSection />
 
       <section className="settings-section">
         <h2>Источники</h2>

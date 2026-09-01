@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import type { PersistedData, Track } from '../shared/types'
+import type { VkImportResult } from '../shared/matching'
 
 const api = {
   loadData: (): Promise<PersistedData> => ipcRenderer.invoke('data:load'),
@@ -9,6 +10,7 @@ const api = {
   scanLibrary: (folders: string[]): Promise<Track[]> =>
     ipcRenderer.invoke('library:scan', folders),
   demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
+  vkImport: (token: string): Promise<VkImportResult> => ipcRenderer.invoke('vk:import', token),
   pickCoverImage: (): Promise<string | null> => ipcRenderer.invoke('playlist:pickCover'),
   setMiniMode: (mini: boolean): Promise<void> => ipcRenderer.invoke('window:mini', mini),
   showItemInFolder: (path: string): void => {

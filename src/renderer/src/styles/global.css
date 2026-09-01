@@ -1371,3 +1371,29 @@ body {
   white-space: nowrap;
   font-size: 14px;
 }
+
+.import-card {
+  padding: 12px;
+  border: 1px solid var(--slider-track);
+  border-radius: var(--radius-card);
+  background: var(--bg-tile);
+}
+
+.import-card-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.import-actions {
+  margin-top: 12px;
+}
+
+.import-status {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.import-error {
+  color: var(--danger, #ef4444);
+}

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { EQ_FREQS, EQ_PRESETS, clampVolume, equalPowerCurves } from './engine'
+import { EQ_FREQS, EQ_PRESETS, clampVolume, equalPowerCurves, mediaUrl, resolveTrackUrl } from './engine'
+import type { Track } from '@shared/types'
+
+function trackWith(filePath: string): Track {
+  return { id: 't', sourceId: 'x', title: 'T', artist: 'A', album: 'Al', durationSec: 1, filePath }
+}
 
 describe('engine EQ constants', () => {
   it('has 10 bands and standard frequencies', () => {
@@ -38,5 +43,19 @@ describe('equalPowerCurves', () => {
     for (let i = 0; i < 31; i++) {
       expect(fadeIn[i] ** 2 + fadeOut[i] ** 2).toBeCloseTo(1, 5)
     }
+  })
+})
+
+describe('resolveTrackUrl', () => {
+  it('returns http(s) stream URLs untouched (no media:// encoding)', () => {
+    const url = 'https://cs9-5v4.vkuseraudio.net/p1/abc/audio.mp3?extra=1'
+    expect(resolveTrackUrl(trackWith(url))).toBe(url)
+    expect(resolveTrackUrl(trackWith('http://example.com/a.mp3'))).toBe('http://example.com/a.mp3')
+  })
+
+  it('encodes local paths as media://', () => {
+    const p = 'C:\\Music\\song.mp3'
+    expect(resolveTrackUrl(trackWith(p))).toBe(mediaUrl(p))
+    expect(resolveTrackUrl(trackWith(p))).toMatch(/^media:\/\//)
   })
 })
