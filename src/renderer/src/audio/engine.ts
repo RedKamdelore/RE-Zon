@@ -12,9 +12,44 @@ export const EQ_PRESETS: Record<string, number[]> = {
 /** Громкость в диапазоне [0, 1] */
 export const clampVolume = (v: number): number => Math.min(1, Math.max(0, v))
 
-export class AudioEngine {  private ctx = new AudioContext()
-  private el = new Audio()
-  private src = this.ctx.createMediaElementSource(this.el)
+const XFADE_POINTS = 32
+
+/**
+ * Equal-power кривые кроссфейда: fadeIn = sin(t·π/2), fadeOut = cos(t·π/2).
+ * Сумма квадратов = 1 в каждой точке — громкость не проседает посередине.
+ */
+export function equalPowerCurves(points = XFADE_POINTS): { fadeIn: Float32Array; fadeOut: Float32Array } {
+  const fadeIn = new Float32Array(points)
+  const fadeOut = new Float32Array(points)
+  for (let i = 0; i < points; i++) {
+    const t = i / (points - 1)
+    fadeIn[i] = Math.sin((t * Math.PI) / 2)
+    fadeOut[i] = Math.cos((t * Math.PI) / 2)
+  }
+  return { fadeIn, fadeOut }
+}
+
+/**
+ * Одна дека: <audio> → MediaElementSource → GainNode (гейн кроссфейда).
+ * createMediaElementSource допустим лишь раз на элемент — создаётся в конструкторе.
+ */
+export class Deck {
+  readonly el = new Audio()
+  readonly gain: GainNode
+
+  constructor(ctx: AudioContext) {
+    this.el.crossOrigin = 'anonymous'
+    const src = ctx.createMediaElementSource(this.el)
+    this.gain = ctx.createGain()
+    src.connect(this.gain)
+  }
+}
+
+export class AudioEngine {
+  private ctx = new AudioContext()
+  private decks: [Deck, Deck] = [new Deck(this.ctx), new Deck(this.ctx)]
+  private activeIndex = 0
+  private stopTimer: ReturnType<typeof setTimeout> | null = null
   private filters = EQ_FREQS.map((f) => {
     const node = this.ctx.createBiquadFilter()
     node.type = 'peaking'
@@ -25,37 +60,61 @@ export class AudioEngine {  private ctx = new AudioContext()
   private gain = this.ctx.createGain()
 
   constructor() {
-    const chain = [this.src, ...this.filters, this.gain]
+    // Обе деки → общая цепь: 10-полосный EQ → master gain → destination
+    for (const deck of this.decks) deck.gain.connect(this.filters[0])
+    const chain = [...this.filters, this.gain]
     for (let i = 0; i < chain.length - 1; i++) chain[i].connect(chain[i + 1])
     this.gain.connect(this.ctx.destination)
-    this.el.crossOrigin = 'anonymous'
+    // Деки в DOM (скрыты): отладка/DevTools видят оба элемента, на звук не влияет
+    for (const deck of this.decks) {
+      deck.el.style.display = 'none'
+      document.body.appendChild(deck.el)
+    }
   }
 
+  private get active(): Deck {
+    return this.decks[this.activeIndex]
+  }
+  private get inactive(): Deck {
+    return this.decks[1 - this.activeIndex]
+  }
+
+  /** Элемент АКТИВНОЙ деки — существующие подписки/чтение currentTime работают как раньше */
   get element(): HTMLAudioElement {
-    return this.el
+    return this.active.el
+  }
+
+  /** Элементы обеих дек — initPlayerSubscriptions подписывается на обе (с фильтром по активной) */
+  get elements(): HTMLAudioElement[] {
+    return this.decks.map((d) => d.el)
   }
 
   play(url: string): void {
-    this.el.src = url
+    this.stopInactive()
+    const deck = this.active
+    deck.gain.gain.cancelScheduledValues(this.ctx.currentTime)
+    deck.gain.gain.value = 1
+    deck.el.src = url
     void this.ctx.resume()
     // catch: AbortError при быстрой смене src (play() прерывается новым load) — не ошибка
-    this.el.play().catch(() => {})
+    deck.el.play().catch(() => {})
   }
   pause(): void {
-    this.el.pause()
+    // Паузим обе деки: иначе затихающая при кроссфейде доиграла бы вслух
+    for (const deck of this.decks) deck.el.pause()
   }
   resume(): void {
     void this.ctx.resume()
     // catch: AbortError при быстрой смене src — не ошибка
-    this.el.play().catch(() => {})
+    this.active.el.play().catch(() => {})
   }
   /** Устанавливает src без воспроизведения ('' — очистить) */
   load(url: string): void {
-    if (url) this.el.src = url
-    else this.el.removeAttribute('src')
+    if (url) this.active.el.src = url
+    else this.active.el.removeAttribute('src')
   }
   seek(sec: number): void {
-    this.el.currentTime = sec
+    this.active.el.currentTime = sec
   }
   setVolume(v: number): void {
     this.gain.gain.value = clampVolume(v)
@@ -63,6 +122,56 @@ export class AudioEngine {  private ctx = new AudioContext()
   setEqGain(band: number, db: number): void {
     if (band < 0 || band >= this.filters.length) return
     this.filters[band].gain.value = db
+  }
+
+  /**
+   * Кроссфейд: неактивная дека стартует с 0 и набирает громкость, активная затихает
+   * (equal-power setValueCurveAtTime по времени AudioContext), деки меняются местами.
+   * Старая дека останавливается после затихания. durationSec <= 0 — жёсткое переключение.
+   */
+  crossfadeTo(url: string, durationSec: number): void {
+    if (durationSec <= 0) {
+      this.play(url)
+      return
+    }
+    if (this.stopTimer !== null) {
+      clearTimeout(this.stopTimer)
+      this.stopTimer = null
+    }
+    const from = this.active
+    const to = this.inactive
+    const now = this.ctx.currentTime
+    const { fadeIn, fadeOut } = equalPowerCurves()
+    to.gain.gain.cancelScheduledValues(now)
+    to.gain.gain.setValueAtTime(0, now)
+    to.gain.gain.setValueCurveAtTime(fadeIn, now, durationSec)
+    from.gain.gain.cancelScheduledValues(now)
+    from.gain.gain.setValueAtTime(1, now)
+    from.gain.gain.setValueCurveAtTime(fadeOut, now, durationSec)
+    to.el.src = url
+    void this.ctx.resume()
+    // catch: AbortError при быстрой смене src — не ошибка
+    to.el.play().catch(() => {})
+    this.activeIndex = 1 - this.activeIndex
+    // ended старой деки стор игнорирует (неактивная), но src всё равно снимаем после затихания
+    this.stopTimer = setTimeout(() => {
+      from.el.pause()
+      from.el.removeAttribute('src')
+      this.stopTimer = null
+    }, durationSec * 1000 + 100)
+  }
+
+  /** Жёсткая остановка неактивной деки и отмена pending-останова (play при смене трека) */
+  private stopInactive(): void {
+    if (this.stopTimer !== null) {
+      clearTimeout(this.stopTimer)
+      this.stopTimer = null
+    }
+    const other = this.inactive
+    other.el.pause()
+    other.el.removeAttribute('src')
+    other.gain.gain.cancelScheduledValues(this.ctx.currentTime)
+    other.gain.gain.value = 1
   }
 }
 

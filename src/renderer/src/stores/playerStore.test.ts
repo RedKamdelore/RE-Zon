@@ -11,10 +11,11 @@ interface FakeCalls {
   setVolume: number[]
   setEqGain: [number, number][]
   load: string[]
+  crossfade: [string, number][]
 }
 
 function makeFakeEngine(): { engine: PlayerEngine; calls: FakeCalls; fire: (type: string) => void } {
-  const calls: FakeCalls = { play: [], pause: 0, resume: 0, seek: [], setVolume: [], setEqGain: [], load: [] }
+  const calls: FakeCalls = { play: [], pause: 0, resume: 0, seek: [], setVolume: [], setEqGain: [], load: [], crossfade: [] }
   const listeners = new Map<string, Set<EventListener>>()
   const element = {
     currentTime: 0,
@@ -37,6 +38,7 @@ function makeFakeEngine(): { engine: PlayerEngine; calls: FakeCalls; fire: (type
     setVolume: (v) => { calls.setVolume.push(v) },
     setEqGain: (b, d) => { calls.setEqGain.push([b, d]) },
     load: (url) => { calls.load.push(url) },
+    crossfadeTo: (url, sec) => { calls.crossfade.push([url, sec]) },
   }
   const fire = (type: string) => listeners.get(type)?.forEach((fn) => fn({ type } as unknown as Event))
   return { engine, calls, fire }
@@ -372,6 +374,63 @@ describe('initPlayerSubscriptions', () => {
     expect(store.getState().playing).toBe(false)
     expect(calls.play).toHaveLength(1) // ничего нового не загружено
     errSpy.mockRestore()
+  })
+})
+
+describe('crossfade', () => {
+  function makeXfStore(xfSec: number): ReturnType<typeof makeFakeEngine> & { store: ReturnType<typeof createPlayerStore> } {
+    const fake = makeFakeEngine()
+    const store = createPlayerStore(fake.engine, () => xfSec)
+    return { ...fake, store }
+  }
+
+  it('crossfadeSec=5: timeupdate at duration−5 crossfades to next track once, pos advances immediately', () => {
+    const { engine, calls, fire, store } = makeXfStore(5)
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    // duration не задана на фейке → fallback на track.durationSec (180)
+    ;(engine.element as { currentTime: number }).currentTime = 175
+    fire('timeupdate')
+    expect(calls.crossfade).toEqual([[mediaUrl(TRACKS[1].filePath), 5]])
+    expect(calls.play).toHaveLength(1) // play() не вызывался — только crossfadeTo
+    expect(store.getState().pos).toBe(1) // UI переключается в начале кроссфейда
+    fire('timeupdate') // повторный timeupdate в окне затихания — без double-trigger
+    fire('timeupdate')
+    expect(calls.crossfade).toHaveLength(1)
+  })
+
+  it('manual next while playing with crossfade>0 uses crossfadeTo, not play', () => {
+    const { calls, store } = makeXfStore(5)
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().next({ manual: true })
+    expect(calls.crossfade).toEqual([[mediaUrl(TRACKS[1].filePath), 5]])
+    expect(calls.play).toHaveLength(1)
+    expect(store.getState().pos).toBe(1)
+  })
+
+  it("repeat 'one' skips crossfade entirely", () => {
+    const { engine, calls, fire, store } = makeXfStore(5)
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().cycleRepeat() // off -> all
+    store.getState().cycleRepeat() // all -> one
+    initPlayerSubscriptions(engine, store)
+    ;(engine.element as { currentTime: number }).currentTime = 175
+    fire('timeupdate')
+    expect(calls.crossfade).toHaveLength(0)
+    expect(store.getState().pos).toBe(0)
+  })
+
+  it('crossfadeSec=0 keeps old behavior (ended -> hard play)', () => {
+    const { engine, calls, fire, store } = makeXfStore(0)
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    ;(engine.element as { currentTime: number }).currentTime = 179
+    fire('timeupdate')
+    expect(calls.crossfade).toHaveLength(0)
+    fire('ended')
+    expect(calls.play).toHaveLength(2)
+    expect(calls.play[1]).toBe(mediaUrl(TRACKS[1].filePath))
+    expect(store.getState().pos).toBe(1)
   })
 })
 

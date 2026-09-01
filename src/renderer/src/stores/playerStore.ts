@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Track, RepeatMode } from '@shared/types'
 import { nextIndex, prevIndex, buildShuffleOrder } from '@shared/queue'
 import { AudioEngine, mediaUrl, clampVolume } from '../audio/engine'
+import { useSettingsStore } from './settingsStore'
 
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
@@ -13,6 +14,8 @@ export interface PlayerEngine {
   setVolume: (v: number) => void
   setEqGain: (band: number, db: number) => void
   load: (url: string) => void // src без воспроизведения ('' — очистить)
+  crossfadeTo?: (url: string, durationSec: number) => void // двухдековый движок; вызовы защищены проверкой
+  elements?: HTMLAudioElement[] // элементы всех дек (подписки); по умолчанию [element]
 }
 
 export interface PlayerState {
@@ -38,11 +41,24 @@ export interface PlayerState {
   enqueue: (track: Track) => void
   removeFromQueue: (position: number) => void // position внутри order
   moveInQueue: (fromPos: number, toPos: number) => void
+  /** Внутренний триггер автокроссфейда — вызывается из timeupdate-подписки */
+  maybeStartCrossfade: () => void
 }
 
 const identityOrder = (length: number): number[] => Array.from({ length }, (_, i) => i)
 
-export function createPlayerStore(engine: PlayerEngine) {
+/**
+ * getCrossfadeSec инжектируется (тесты передают своё значение);
+ * по умолчанию читает настройку playback.crossfadeSec из settingsStore.
+ */
+export function createPlayerStore(
+  engine: PlayerEngine,
+  getCrossfadeSec: () => number = () => useSettingsStore.getState().playback.crossfadeSec,
+) {
+  // Флаг «кроссфейд для текущего трека уже запущен» — защита от повторного
+  // срабатывания на каждый timeupdate в окне затихания. Перевзводится на
+  // playTracks/next/prev и при выходе из окна конца трека (новый трек, seek назад).
+  let crossfadeDone = false
   const playAt = (state: Pick<PlayerState, 'queue' | 'order'>, pos: number): void => {
     engine.play(mediaUrl(state.queue[state.order[pos]].filePath))
   }
@@ -60,6 +76,7 @@ export function createPlayerStore(engine: PlayerEngine) {
 
     playTracks: (tracks, startIndex) => {
       if (tracks.length === 0) return
+      crossfadeDone = false
       const shuffle = get().shuffle
       const order = shuffle ? buildShuffleOrder(tracks.length, startIndex) : identityOrder(tracks.length)
       const pos = shuffle ? 0 : startIndex // при shuffle order[0] === startIndex
@@ -84,6 +101,7 @@ export function createPlayerStore(engine: PlayerEngine) {
     next: (opts) => {
       const { order, pos, repeat, queue } = get()
       if (order.length === 0) return
+      crossfadeDone = false
       // Ручной skip всегда двигается вперёд: repeat 'one' трактуем как 'all',
       // иначе nextIndex() вернул бы ту же позицию (см. review note).
       const effectiveRepeat = opts?.manual && repeat === 'one' ? 'all' : repeat
@@ -93,13 +111,20 @@ export function createPlayerStore(engine: PlayerEngine) {
         set({ playing: false })
         return
       }
+      // Ручной skip на ходу с кроссфейдером — плавный переход вместо жёсткого play
+      const xfSec = opts?.manual && get().playing ? getCrossfadeSec() : 0
       set({ pos: nextPos, currentSec: 0, playing: true })
+      if (xfSec > 0 && engine.crossfadeTo) {
+        engine.crossfadeTo(mediaUrl(queue[order[nextPos]].filePath), xfSec)
+        return
+      }
       playAt({ queue, order }, nextPos)
     },
 
     prev: () => {
       const { order, pos, queue } = get()
       if (order.length === 0) return
+      crossfadeDone = false // prev — всегда жёсткое переключение
       // Spotify-поведение: если трек играет > 3 сек — перемотка в начало
       if (engine.element.currentTime > 3) {
         get().seek(0)
@@ -197,6 +222,31 @@ export function createPlayerStore(engine: PlayerEngine) {
       // pos следует за играющим треком — текущий трек не меняется при drag-and-drop
       set({ order: newOrder, pos: newOrder.indexOf(currentQueueIndex) })
     },
+
+    // Автокроссфейд: за crossfadeSec до конца трека запускает equal-power переход
+    // на следующий (auto-next семантика nextIndex), pos переключается сразу —
+    // UI показывает новый трек с начала затихания. repeat 'one' и crossfadeSec=0
+    // не меняют старое поведение (auto-next по событию ended).
+    maybeStartCrossfade: () => {
+      const xfSec = getCrossfadeSec()
+      if (xfSec <= 0 || !engine.crossfadeTo) return
+      const { queue, order, pos, repeat, playing } = get()
+      if (!playing || order.length === 0 || repeat === 'one') return
+      const el = engine.element
+      const track = queue[order[pos]]
+      const duration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : track.durationSec
+      const remaining = duration - el.currentTime
+      if (remaining > xfSec) {
+        crossfadeDone = false // вне окна конца трека — перевзводим (новый трек / seek назад)
+        return
+      }
+      if (remaining <= 0 || crossfadeDone) return
+      const nextPos = nextIndex(order, pos, order[pos], repeat)
+      if (nextPos === null) return // конец очереди при repeat off — доигрываем до ended
+      crossfadeDone = true
+      set({ pos: nextPos, currentSec: 0, playing: true })
+      engine.crossfadeTo(mediaUrl(queue[order[nextPos]].filePath), xfSec)
+    },
   }))
 }
 
@@ -213,6 +263,9 @@ const lazyEngine: PlayerEngine = {
   get element() {
     return getRealEngine().element
   },
+  get elements() {
+    return getRealEngine().elements
+  },
   play: (url) => getRealEngine().play(url),
   pause: () => getRealEngine().pause(),
   resume: () => getRealEngine().resume(),
@@ -220,6 +273,7 @@ const lazyEngine: PlayerEngine = {
   setVolume: (v) => getRealEngine().setVolume(v),
   setEqGain: (band, db) => getRealEngine().setEqGain(band, db),
   load: (url) => getRealEngine().load(url),
+  crossfadeTo: (url, sec) => getRealEngine().crossfadeTo(url, sec),
 }
 
 export const usePlayerStore = createPlayerStore(lazyEngine)
@@ -244,30 +298,42 @@ export function initPlayerSubscriptions(
   currentSubscription?.()
   const ac = new AbortController()
   const { signal } = ac
-  engine.element.addEventListener(
-    'timeupdate',
-    () => {
-      store.setState({ currentSec: engine.element.currentTime })
-    },
-    { signal },
-  )
-  engine.element.addEventListener(
-    'ended',
-    () => {
-      store.getState().next() // auto-advance
-    },
-    { signal },
-  )
-  engine.element.addEventListener(
-    'error',
-    () => {
-      // Файл удалён/перемещён: без обработчика плеер вечно «играет» мёртвый src,
-      // а auto-advance умирает. Пропускаем трек с auto-семантикой (учитывает repeat).
-      console.error('audio error, skipping:', engine.element.currentSrc || engine.element.src)
-      store.getState().next()
-    },
-    { signal },
-  )
+  // Двухдековый движок: подписываемся на обе деки, но события неактивной
+  // (затихающей при кроссфейде) игнорируем — иначе её ended вызвал бы лишний
+  // auto-next, а timeupdate дёргал бы currentSec. У фейков/однодековых движков
+  // elements отсутствует — одна подписка, а события без target не фильтруются.
+  const elements = engine.elements ?? [engine.element]
+  const fromActiveDeck = (e: Event): boolean => !e.target || e.target === engine.element
+  for (const el of elements) {
+    el.addEventListener(
+      'timeupdate',
+      (e) => {
+        if (!fromActiveDeck(e)) return
+        store.setState({ currentSec: engine.element.currentTime })
+        store.getState().maybeStartCrossfade()
+      },
+      { signal },
+    )
+    el.addEventListener(
+      'ended',
+      (e) => {
+        if (!fromActiveDeck(e)) return
+        store.getState().next() // auto-advance
+      },
+      { signal },
+    )
+    el.addEventListener(
+      'error',
+      (e) => {
+        if (!fromActiveDeck(e)) return
+        // Файл удалён/перемещён: без обработчика плеер вечно «играет» мёртвый src,
+        // а auto-advance умирает. Пропускаем трек с auto-семантикой (учитывает repeat).
+        console.error('audio error, skipping:', engine.element.currentSrc || engine.element.src)
+        store.getState().next()
+      },
+      { signal },
+    )
+  }
   const unsubscribe = (): void => {
     ac.abort()
     if (currentSubscription === unsubscribe) currentSubscription = null
