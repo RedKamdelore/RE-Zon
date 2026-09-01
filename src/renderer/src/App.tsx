@@ -6,21 +6,20 @@ import HomeView from './components/HomeView'
 import SearchView from './components/SearchView'
 import PlaylistView from './components/PlaylistView'
 import SettingsView from './components/SettingsView'
+import CollectionView from './components/CollectionView'
 import MiniPlayer from './components/MiniPlayer'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore } from './stores/lyricsStore'
+import { useNavStore, type View } from './stores/navStore'
 
-export type View =
-  | { name: 'home' }
-  | { name: 'search' }
-  | { name: 'playlist'; id: string }
-  | { name: 'settings' }
+export type { View }
 
 export default function App() {
-  const [view, setView] = useState<View>({ name: 'home' })
+  const view = useNavStore((s) => s.view)
+  const setView = useNavStore((s) => s.setView)
   const playlists = usePlaylistStore((s) => s.playlists)
   const tracks = useLibraryStore((s) => s.tracks)
 
@@ -100,6 +99,8 @@ export default function App() {
           ) : (
             <HomeView />
           ))}
+        {view.name === 'artist' && <CollectionView kind="artist" name={view.artist} />}
+        {view.name === 'album' && <CollectionView kind="album" name={view.album} />}
       </main>
       {panel && <RightPanel panel={panel} onClose={() => setPanel(null)} />}
       <PlayerBar onTogglePanel={onTogglePanel} />

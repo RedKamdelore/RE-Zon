@@ -500,6 +500,22 @@ body {
   background: var(--hover-overlay);
 }
 
+.ctx-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ctx-item:disabled:hover {
+  background: transparent;
+}
+
+/* Разделительная линия между группами пунктов меню */
+.ctx-sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--hover-overlay);
+}
+
 /* Второй уровень меню — выбор плейлиста */
 .ctx-submenu {
   max-height: 240px;

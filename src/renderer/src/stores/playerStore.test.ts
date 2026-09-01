@@ -172,6 +172,58 @@ describe('playerStore', () => {
     expect(s.order).toEqual([0, 1, 2, 3])
   })
 
+  it('playNext inserts a new track right after the current position; playback continues', () => {
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().playNext(makeTrack(4))
+    const s = store.getState()
+    expect(s.queue).toHaveLength(4)
+    expect(s.order).toEqual([0, 3, 1, 2])
+    expect(s.pos).toBe(0) // текущий трек не изменился
+    expect(s.playing).toBe(true)
+    expect(calls.play).toHaveLength(1) // без перезагрузки движка
+  })
+
+  it('playNext dedupes a track already in queue: old order entry removed, inserted at pos+1', () => {
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().playNext(TRACKS[2]) // уже в очереди (queue index 2)
+    const s = store.getState()
+    expect(s.queue).toHaveLength(3) // трек не дублируется
+    expect(s.order).toEqual([0, 2, 1])
+    expect(s.queue[s.order[s.pos]].id).toBe('local:t1')
+    expect(s.playing).toBe(true)
+  })
+
+  it('playNext dedupe of a track before the current one re-anchors pos to the same track', () => {
+    store.getState().playTracks(TRACKS, 1) // играет t2, pos=1
+    store.getState().playNext(TRACKS[0]) // t1 находится ДО текущей позиции
+    const s = store.getState()
+    expect(s.queue).toHaveLength(3)
+    expect(s.order).toEqual([1, 0, 2])
+    expect(s.pos).toBe(0)
+    expect(s.queue[s.order[s.pos]].id).toBe('local:t2')
+    expect(s.playing).toBe(true)
+    expect(calls.play).toHaveLength(1)
+  })
+
+  it('playNext on the currently playing track is a no-op', () => {
+    store.getState().playTracks(TRACKS, 1)
+    store.getState().playNext(TRACKS[1])
+    const s = store.getState()
+    expect(s.order).toEqual([0, 1, 2])
+    expect(s.pos).toBe(1)
+  })
+
+  it('playNext onto an empty queue preloads src without autoplay (like enqueue)', () => {
+    store.getState().playNext(TRACKS[0])
+    const s = store.getState()
+    expect(s.queue).toHaveLength(1)
+    expect(s.order).toEqual([0])
+    expect(s.pos).toBe(0)
+    expect(s.playing).toBe(false)
+    expect(calls.load).toEqual([mediaUrl(TRACKS[0].filePath)])
+    expect(calls.play).toHaveLength(0)
+  })
+
   it('enqueue onto empty queue preloads src; togglePlay then resumes with playing=true', () => {
     store.getState().enqueue(TRACKS[0])
     const s = store.getState()

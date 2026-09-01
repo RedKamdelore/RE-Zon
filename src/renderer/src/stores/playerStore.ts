@@ -39,6 +39,7 @@ export interface PlayerState {
   toggleShuffle: () => void
   cycleRepeat: () => void
   enqueue: (track: Track) => void
+  playNext: (track: Track) => void // вставка сразу после текущей позиции в order
   removeFromQueue: (position: number) => void // position внутри order
   moveInQueue: (fromPos: number, toPos: number) => void
   /** Внутренний триггер автокроссфейда — вызывается из timeupdate-подписки */
@@ -187,6 +188,34 @@ export function createPlayerStore(
         engine.load(mediaUrl(track.filePath))
         set({ pos: 0, currentSec: 0 })
       }
+    },
+
+    // «Играть следующим»: трек встаёт в order сразу после текущей позиции.
+    // Трек, уже присутствующий в очереди (по id), не дублируется — его старый
+    // слот в order удаляется, pos переякоривается на играющий трек.
+    // Воспроизведение не прерывается (движок не трогаем). Пустая очередь —
+    // семантика enqueue (предзагрузка без autoplay).
+    playNext: (track) => {
+      const { queue, order, pos } = get()
+      if (order.length === 0) {
+        get().enqueue(track)
+        return
+      }
+      const currentQueueIndex = order[pos]
+      let newQueue = queue
+      let newOrder = order
+      let queueIndex = queue.findIndex((t) => t.id === track.id)
+      if (queueIndex === currentQueueIndex) return // трек уже играет — no-op
+      if (queueIndex >= 0) {
+        const entryPos = newOrder.indexOf(queueIndex)
+        if (entryPos >= 0) newOrder = [...newOrder.slice(0, entryPos), ...newOrder.slice(entryPos + 1)]
+      } else {
+        queueIndex = queue.length
+        newQueue = [...queue, track]
+      }
+      const newPos = newOrder.indexOf(currentQueueIndex)
+      newOrder = [...newOrder.slice(0, newPos + 1), queueIndex, ...newOrder.slice(newPos + 1)]
+      set({ queue: newQueue, order: newOrder, pos: newPos })
     },
 
     // Упрощённая семантика: после удаления order перестраивается как identity

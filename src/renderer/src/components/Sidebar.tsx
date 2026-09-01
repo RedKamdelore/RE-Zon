@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { View } from '../App'
+import type { View } from '../stores/navStore'
 import { usePlaylistStore } from '../stores/playlistStore'
 import { HomeIcon, SearchIcon, GearIcon, PlusIcon, MusicNoteIcon } from './icons'
 

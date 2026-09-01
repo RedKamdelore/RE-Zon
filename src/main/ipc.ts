@@ -1,4 +1,4 @@
-import { ipcMain, dialog, app, BrowserWindow } from 'electron'
+import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
 import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
 import { loadData, saveData } from './persistence'
@@ -43,4 +43,5 @@ export function registerIpc(win: BrowserWindow): void {
     else { win.setAlwaysOnTop(false); win.setMinimumSize(940, 600); win.setSize(1280, 800) }
   })
   ipcMain.on('player:cmd', (_e, cmd: string) => win.webContents.send('player:cmd', cmd))
+  ipcMain.on('shell:showItemInFolder', (_e, p: string) => shell.showItemInFolder(p))
 }

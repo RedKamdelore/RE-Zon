@@ -11,6 +11,9 @@ const api = {
   demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
   pickCoverImage: (): Promise<string | null> => ipcRenderer.invoke('playlist:pickCover'),
   setMiniMode: (mini: boolean): Promise<void> => ipcRenderer.invoke('window:mini', mini),
+  showItemInFolder: (path: string): void => {
+    ipcRenderer.send('shell:showItemInFolder', path)
+  },
   onPlayerCommand: (cb: (cmd: string) => void) => {
     const listener = (_e: IpcRendererEvent, cmd: string): void => cb(cmd)
     ipcRenderer.on('player:cmd', listener)

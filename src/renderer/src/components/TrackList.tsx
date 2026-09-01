@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Track } from '@shared/types'
 import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
+import { useNavStore } from '../stores/navStore'
 import { fmt } from '../utils/format'
 import { PlayIcon, ClockIcon, MusicNoteIcon } from './icons'
 
@@ -22,18 +23,33 @@ interface MenuState {
 function ContextMenu({
   menu,
   hasRemove,
-  onEnqueue,
+  onPlayTrack,
   onRemove,
   onClose,
 }: {
   menu: MenuState
   hasRemove: boolean
-  onEnqueue: (track: Track) => void
+  onPlayTrack: (index: number) => void
   onRemove: (index: number) => void
   onClose: () => void
 }) {
   const playlists = usePlaylistStore((s) => s.playlists)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  // Кламп к вьюпорту: начальная позиция — точка клика, после монтирования
+  // измеряем меню и отражаем вверх/влево, если оно вылезает за край
+  const [pos, setPos] = useState({ left: menu.x, top: menu.y })
+
+  useLayoutEffect(() => {
+    const el = menuRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const margin = 8
+    setPos({
+      left: menu.x + width + margin > window.innerWidth ? Math.max(margin, menu.x - width) : menu.x,
+      top: menu.y + height + margin > window.innerHeight ? Math.max(margin, menu.y - height) : menu.y,
+    })
+  }, [menu])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -43,14 +59,35 @@ function ContextMenu({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const t = menu.track
+  const submenuLeft = pos.left + (menuRef.current?.offsetWidth ?? 188)
+
   return (
     <>
       <div className="ctx-overlay" onClick={onClose} onContextMenu={onClose} />
-      <div className="ctx-menu" style={{ left: menu.x, top: menu.y }}>
+      <div ref={menuRef} className="ctx-menu" style={{ left: pos.left, top: pos.top }}>
         <button
           className="ctx-item"
           onClick={() => {
-            onEnqueue(menu.track)
+            onPlayTrack(menu.index)
+            onClose()
+          }}
+        >
+          Воспроизвести
+        </button>
+        <button
+          className="ctx-item"
+          onClick={() => {
+            usePlayerStore.getState().playNext(t)
+            onClose()
+          }}
+        >
+          Играть следующим
+        </button>
+        <button
+          className="ctx-item"
+          onClick={() => {
+            usePlayerStore.getState().enqueue(t)
             onClose()
           }}
         >
@@ -72,9 +109,59 @@ function ContextMenu({
             Удалить из плейлиста
           </button>
         )}
+        {(t.album !== 'Неизвестный альбом' || t.artist !== 'Неизвестный исполнитель') && (
+          <div className="ctx-sep" />
+        )}
+        {t.album !== 'Неизвестный альбом' && (
+          <button
+            className="ctx-item"
+            onClick={() => {
+              useNavStore.getState().setView({ name: 'album', album: t.album, artist: t.artist })
+              onClose()
+            }}
+          >
+            Перейти к альбому
+          </button>
+        )}
+        {t.artist !== 'Неизвестный исполнитель' && (
+          <button
+            className="ctx-item"
+            onClick={() => {
+              useNavStore.getState().setView({ name: 'artist', artist: t.artist })
+              onClose()
+            }}
+          >
+            Перейти к исполнителю
+          </button>
+        )}
+        <div className="ctx-sep" />
+        {/* V2-5: радио/рекомендации по треку — пока заглушка */}
+        <button className="ctx-item" disabled title="скоро">
+          Рекомендации по треку
+        </button>
+        <button
+          className="ctx-item"
+          onClick={() => {
+            void navigator.clipboard.writeText(`${t.artist} — ${t.title}`)
+            onClose()
+          }}
+        >
+          Копировать название
+        </button>
+        {t.sourceId === 'local' && (
+          <button
+            className="ctx-item"
+            onClick={() => {
+              window.api?.showItemInFolder(t.filePath)
+              onClose()
+            }}
+          >
+            Показать в папке
+          </button>
+        )}
       </div>
       {pickerOpen && (
-        <div className="ctx-menu ctx-submenu" style={{ left: menu.x + 188, top: menu.y }}>
+        <div className="ctx-menu ctx-submenu" style={{ left: submenuLeft, top: pos.top }}>
           {playlists.map((pl) => (
             <button
               key={pl.id}
@@ -150,7 +237,7 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
         <ContextMenu
           menu={menu}
           hasRemove={onRemoveTrack !== undefined}
-          onEnqueue={(track) => usePlayerStore.getState().enqueue(track)}
+          onPlayTrack={(index) => play(tracks, index)}
           onRemove={(index) => onRemoveTrack?.(index)}
           onClose={() => setMenu(null)}
         />
