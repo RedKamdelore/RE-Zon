@@ -16,6 +16,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     playStats: {},
     lastfmApiKey: '',
     importSources: {},
+    importedTracks: [],
     ...overrides,
   }
 }
@@ -23,6 +24,13 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
 describe('libraryStore.addTracks', () => {
   beforeEach(() => {
     useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    setPersistedBase(null)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    delete (globalThis as Record<string, unknown>).window
+    setPersistedBase(null)
   })
 
   it('appends new tracks and dedupes by id', () => {
@@ -34,6 +42,74 @@ describe('libraryStore.addTracks', () => {
     // повторный импорт не плодит дубликаты
     useLibraryStore.getState().addTracks([t('vk:2'), t('vk:3')])
     expect(useLibraryStore.getState().tracks.map((x) => x.id)).toEqual(['vk:1', 'vk:2', 'vk:3'])
+  })
+
+  it('persists imported tracks via debounced saveData', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+    const t = (id: string, sourceId: string): Track => ({
+      id, sourceId, title: 'T', artist: 'A', album: 'X', durationSec: 1, filePath: 'https://x/a.mp3',
+    })
+    useLibraryStore.getState().addTracks([t('vk:1', 'vk'), t('sc:2', 'soundcloud')])
+    vi.advanceTimersByTime(500)
+    expect(saveData).toHaveBeenCalledTimes(1)
+    const saved = saveData.mock.calls[0][0] as PersistedData
+    expect(saved.importedTracks.map((x) => x.id)).toEqual(['vk:1', 'sc:2'])
+    // база обновлена — следующий persist не затирает importedTracks
+    expect(getPersistedBase()?.importedTracks.map((x) => x.id)).toEqual(['vk:1', 'sc:2'])
+  })
+
+  it('does not persist local/demo tracks', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+    useLibraryStore.getState().addTracks([
+      { id: 'local:x', sourceId: 'local', title: 'T', artist: 'A', album: 'X', durationSec: 1, filePath: 'C:\\a.mp3' },
+      { id: 'vk:9', sourceId: 'vk', title: 'T', artist: 'A', album: 'X', durationSec: 1, filePath: 'https://x/9.mp3' },
+    ])
+    vi.advanceTimersByTime(500)
+    const saved = saveData.mock.calls[0][0] as PersistedData
+    expect(saved.importedTracks.map((x) => x.id)).toEqual(['vk:9'])
+  })
+})
+
+describe('libraryStore.init imported tracks', () => {
+  beforeEach(() => {
+    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    setPersistedBase(null)
+  })
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).window
+    setPersistedBase(null)
+  })
+
+  const vkTrack: Track = {
+    id: 'vk:1', sourceId: 'vk', title: 'VK Song', artist: 'A', album: 'VK', durationSec: 10, filePath: 'https://x/a.mp3',
+  }
+
+  it('restores persisted importedTracks after rescan', async () => {
+    const local: Track = {
+      id: 'local:a', sourceId: 'local', title: 'L', artist: 'A', album: 'X', durationSec: 1, filePath: 'C:\\a.mp3',
+    }
+    ;(globalThis as Record<string, unknown>).window = {
+      api: { scanLibrary: vi.fn().mockResolvedValue([local]) },
+    }
+    await useLibraryStore.getState().init(makeBase({ importedTracks: [vkTrack] }))
+    expect(useLibraryStore.getState().tracks.map((t) => t.id)).toEqual(['local:a', 'vk:1'])
+  })
+
+  it('restores persisted importedTracks over the demo library and dedupes by id', async () => {
+    ;(globalThis as Record<string, unknown>).window = {
+      api: { demoLibrary: vi.fn().mockResolvedValue([vkTrack]) },
+    }
+    await useLibraryStore.getState().init(makeBase({ musicFolders: [], importedTracks: [vkTrack] }))
+    // дубликат из importedTracks отброшен — демо-трек с тем же id уже есть
+    expect(useLibraryStore.getState().tracks.map((t) => t.id)).toEqual(['vk:1'])
+    expect(useLibraryStore.getState().usingDemo).toBe(true)
   })
 })
 

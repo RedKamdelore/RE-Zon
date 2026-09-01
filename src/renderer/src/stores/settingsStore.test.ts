@@ -18,6 +18,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     playStats: {},
     lastfmApiKey: '',
     importSources: {},
+    importedTracks: [],
     ...overrides,
   }
 }

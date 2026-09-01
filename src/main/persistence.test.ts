@@ -22,6 +22,7 @@ describe('mergeWithDefaults', () => {
     expect(d.playStats).toEqual({})
     expect(d.lastfmApiKey).toBe('')
     expect(d.importSources).toEqual({})
+    expect(d.importedTracks).toEqual([])
   })
   it('partial v2 data merges with defaults', () => {
     const r = mergeWithDefaults({ volume: 0.5, musicFolders: ['D:\\Music'] })
@@ -42,8 +43,24 @@ describe('mergeWithDefaults', () => {
       playStats: { 'local:x': { count: 3, lastPlayed: 123 } },
       lastfmApiKey: 'key',
       importSources: { vk: { token: 't' } },
+      importedTracks: [
+        {
+          id: 'vk:1_2',
+          sourceId: 'vk',
+          title: 'Song',
+          artist: 'Artist',
+          album: 'VK',
+          durationSec: 100,
+          filePath: 'https://example.com/a.mp3',
+        },
+      ],
     }
     expect(mergeWithDefaults(v2)).toEqual(v2)
+  })
+  it('v2 file without importedTracks (pre-V2-7) gets the default', () => {
+    const { importedTracks: _omit, ...oldV2 } = DEFAULT_DATA
+    const r = mergeWithDefaults(oldV2)
+    expect(r.importedTracks).toEqual([])
   })
   it('v1-shaped data migrates to v2 keeping old values', () => {
     const v1 = {
@@ -67,6 +84,7 @@ describe('mergeWithDefaults', () => {
     expect(r.playStats).toEqual({})
     expect(r.lastfmApiKey).toBe('')
     expect(r.importSources).toEqual({})
+    expect(r.importedTracks).toEqual([])
   })
   it('partial v1-shaped data migrates with defaults for missing old fields', () => {
     const r = mergeWithDefaults({ version: 1 as const, volume: 0.1 })

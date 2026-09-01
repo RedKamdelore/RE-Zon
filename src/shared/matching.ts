@@ -19,6 +19,11 @@ export type VkImportResult =
   | { ok: true; tracks: ImportedTrack[] }
   | { ok: false; error: string }
 
+/** То же для поиска SoundCloud (sc:search) */
+export type ScSearchResult =
+  | { ok: true; tracks: ImportedTrack[] }
+  | { ok: false; error: string }
+
 /** Нижний регистр + пунктуация → пробел + схлопывание пробелов (общая база) */
 function normalizeBase(s: string): string {
   return s

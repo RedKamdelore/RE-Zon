@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPlayerStore, initPlayerSubscriptions, type PlayerEngine } from './playerStore'
 import { useStatsStore } from './statsStore'
 import { mediaUrl } from '../audio/engine'
@@ -540,6 +540,62 @@ describe('playStats recording', () => {
     store.getState().playTracks(TRACKS, 0)
     store.getState().next({ manual: true })
     expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
+  })
+})
+
+describe('soundcloud stream resolution', () => {
+  let engine: PlayerEngine
+  let calls: FakeCalls
+  let store: ReturnType<typeof createPlayerStore>
+
+  const scTrack: Track = {
+    id: 'sc:1',
+    sourceId: 'soundcloud',
+    title: 'lofi',
+    artist: 'chillhop',
+    album: 'SoundCloud',
+    durationSec: 180,
+    filePath: 'https://api-v2.soundcloud.com/media/song/1/stream/progressive?client_id=x',
+  }
+
+  beforeEach(() => {
+    ;({ engine, calls } = makeFakeEngine())
+    store = createPlayerStore(engine)
+  })
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).window
+  })
+
+  it('resolves the transcoding URL lazily at play time, then plays the final url', async () => {
+    const scResolveStream = vi.fn().mockResolvedValue('https://cf-media.sndcdn.com/final.mp3')
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    store.getState().playTracks([scTrack], 0)
+    // sync engine.play не вызывается — ждём резолв
+    expect(calls.play).toHaveLength(0)
+    await vi.waitFor(() => expect(calls.play).toEqual(['https://cf-media.sndcdn.com/final.mp3']))
+    expect(scResolveStream).toHaveBeenCalledWith(scTrack.filePath)
+  })
+
+  it('skips to the next track when stream resolution fails', async () => {
+    const scResolveStream = vi.fn().mockRejectedValue(new Error('HTTP 404'))
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    store.getState().playTracks([scTrack, makeTrack(2)], 0)
+    await vi.waitFor(() => expect(calls.play).toEqual([mediaUrl(makeTrack(2).filePath)]))
+    expect(store.getState().pos).toBe(1)
+  })
+
+  it('does not play a stale url if the user switched track during resolution', async () => {
+    let resolveIt: (url: string) => void = () => {}
+    const scResolveStream = vi.fn(
+      () => new Promise<string>((res) => { resolveIt = res }),
+    )
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    store.getState().playTracks([scTrack, makeTrack(2)], 0)
+    store.getState().next({ manual: true }) // ушли на track2 до завершения резолва
+    resolveIt('https://cf-media.sndcdn.com/late.mp3')
+    await Promise.resolve()
+    expect(calls.play).toEqual([mediaUrl(makeTrack(2).filePath)])
   })
 })
 

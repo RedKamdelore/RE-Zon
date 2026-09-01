@@ -15,6 +15,7 @@ export const DEFAULT_DATA: PersistedData = {
   playStats: {},
   lastfmApiKey: '',
   importSources: {},
+  importedTracks: [],
 }
 
 /** Старый формат файла player-data.json (до V2-1) */

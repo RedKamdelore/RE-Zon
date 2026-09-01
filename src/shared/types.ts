@@ -1,6 +1,6 @@
 export interface Track {
   id: string;            // `${sourceId}:${path или demoId}`
-  sourceId: string;      // 'local' | 'demo' | 'vk'
+  sourceId: string;      // 'local' | 'demo' | 'vk' | 'soundcloud'
   title: string;
   artist: string;
   album: string;
@@ -43,4 +43,7 @@ export interface PersistedData {
   playStats: Record<string, { count: number; lastPlayed: number }>; // для будущих рекомендаций
   lastfmApiKey: string;
   importSources: Record<string, unknown>;
+  // Импортированные внешние треки (VK, SoundCloud): плейлисты ссылаются на их id,
+  // поэтому без персистентности после рестарта ссылки вели бы в никуда.
+  importedTracks: Track[];
 }

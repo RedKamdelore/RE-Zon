@@ -61,15 +61,38 @@ export function createPlayerStore(
   // срабатывания на каждый timeupdate в окне затихания. Перевзводится на
   // playTracks/next/prev и при выходе из окна конца трека (новый трек, seek назад).
   let crossfadeDone = false
-  const playAt = (state: Pick<PlayerState, 'queue' | 'order'>, pos: number): void => {
+  return create<PlayerState>()((set, get) => {
+  const playAt = (state: Pick<PlayerState, 'queue' | 'order' | 'next'>, pos: number): void => {
     const track = state.queue[state.order[pos]]
-    engine.play(resolveTrackUrl(track))
+    // SoundCloud: filePath — transcoding API URL (отдаёт JSON {url}), финальный
+    // mp3 резолвим лениво при старте. Ошибка резолва — как у мёртвого файла:
+    // пропускаем трек (auto-семантика next).
+    if (
+      track.sourceId === 'soundcloud' &&
+      typeof window !== 'undefined' &&
+      typeof window.api?.scResolveStream === 'function'
+    ) {
+      window.api
+        .scResolveStream(track.filePath)
+        .then((url) => {
+          // За время резолва пользователь мог переключить трек — не переигрываем
+          const current = get().queue[get().order[get().pos]]
+          if (current?.id === track.id) engine.play(url)
+        })
+        .catch((e) => {
+          console.error('soundcloud resolve failed, skipping:', e)
+          const current = get().queue[get().order[get().pos]]
+          if (current?.id === track.id) state.next()
+        })
+    } else {
+      engine.play(resolveTrackUrl(track))
+    }
     // Статистика прослушиваний: пишем именно в точке реального старта трека
     // (playTracks/next/prev). Кроссфейд-пути зовут recordPlay сами (см. ниже).
     recordPlay(track.id)
   }
 
-  return create<PlayerState>()((set, get) => ({
+  return {
     queue: [],
     order: [],
     pos: 0,
@@ -125,7 +148,7 @@ export function createPlayerStore(
         recordPlay(queue[order[nextPos]].id)
         return
       }
-      playAt({ queue, order }, nextPos)
+      playAt({ queue, order, next: get().next }, nextPos)
     },
 
     prev: () => {
@@ -139,7 +162,7 @@ export function createPlayerStore(
       }
       const prevPos = prevIndex(order, pos)
       set({ pos: prevPos, currentSec: 0, playing: true })
-      playAt({ queue, order }, prevPos)
+      playAt({ queue, order, next: get().next }, prevPos)
     },
 
     seek: (sec) => {
@@ -283,7 +306,8 @@ export function createPlayerStore(
       engine.crossfadeTo(resolveTrackUrl(queue[order[nextPos]]), xfSec)
       recordPlay(queue[order[nextPos]].id)
     },
-  }))
+  }
+  })
 }
 
 // --- Синглтон с ленивым реальным движком ---

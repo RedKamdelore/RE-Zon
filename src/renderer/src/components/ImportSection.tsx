@@ -14,6 +14,7 @@ export default function ImportSection() {
     <section className="settings-section">
       <h2>Импорт</h2>
       <VkCard />
+      <ScCard />
     </section>
   )
 }
@@ -34,6 +35,95 @@ function nextVkPlaylistName(existing: string[]): string {
   let n = 2
   while (existing.includes(`${base} (${n})`)) n++
   return `${base} (${n})`
+}
+
+/** «SoundCloud: <query>», при коллизии — «… (N)», наименьший свободный N */
+function nextScPlaylistName(existing: string[], query: string): string {
+  const base = `SoundCloud: ${query}`
+  if (!existing.includes(base)) return base
+  let n = 2
+  while (existing.includes(`${base} (${n})`)) n++
+  return `${base} (${n})`
+}
+
+function ScCard() {
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const doImport = async (): Promise<void> => {
+    const q = query.trim()
+    if (!window.api || busy || q === '') return
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const res = await window.api.scSearch(q)
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      const playable = res.tracks.filter((t) => t.streamUrl)
+      if (playable.length === 0) {
+        setStatus(
+          res.tracks.length === 0
+            ? 'По запросу ничего не найдено'
+            : 'Найденные треки недоступны для стриминга',
+        )
+        return
+      }
+      // filePath — transcoding API URL: финальный поток резолвится при старте
+      // воспроизведения (playerStore → scResolveStream)
+      const tracks: Track[] = playable.map((t, i) => ({
+        id: `sc:${t.extId ?? i}`,
+        sourceId: 'soundcloud',
+        title: t.title,
+        artist: t.artist,
+        album: 'SoundCloud',
+        durationSec: t.durationSec ?? 0,
+        filePath: t.streamUrl!,
+      }))
+      useLibraryStore.getState().addTracks(tracks)
+      const pl = usePlaylistStore.getState()
+      const name = nextScPlaylistName(pl.playlists.map((p) => p.name), q)
+      const playlistId = pl.create(name)
+      for (const t of tracks) pl.addTrack(playlistId, t.id)
+      setStatus(`Импортировано ${tracks.length} ${plural(tracks.length, 'трек', 'трека', 'треков')}`)
+      useNavStore.getState().setView({ name: 'playlist', id: playlistId })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ProviderCard name="SoundCloud">
+      <div className="settings-label">Поиск по публичному каталогу (без токена)</div>
+      <input
+        type="text"
+        className="settings-input"
+        placeholder="Например: lofi"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void doImport()
+        }}
+      />
+      <div className="import-actions">
+        <button
+          className="btn-outline"
+          disabled={busy || query.trim() === ''}
+          onClick={() => void doImport()}
+        >
+          {busy ? 'Импорт…' : 'Импортировать топ-50 как плейлист'}
+        </button>
+      </div>
+      {error && <div className="import-status import-error">{error}</div>}
+      {status && <div className="import-status">{status}</div>}
+    </ProviderCard>
+  )
 }
 
 function VkCard() {

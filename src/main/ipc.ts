@@ -4,8 +4,9 @@ import { readFile } from 'fs/promises'
 import { loadData, saveData } from './persistence'
 import { scanFolders, demoTracks } from './library'
 import { vkAudioGet } from './vk'
+import { scSearch, scResolveStream } from './soundcloud'
 import type { PersistedData } from '../shared/types'
-import type { VkImportResult } from '../shared/matching'
+import type { VkImportResult, ScSearchResult } from '../shared/matching'
 
 const COVER_MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -35,6 +36,15 @@ export function registerIpc(win: BrowserWindow): void {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   })
+  ipcMain.handle('sc:search', async (_e, query: string): Promise<ScSearchResult> => {
+    try {
+      return { ok: true, tracks: await scSearch(query) }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  // Transcoding API URL → финальный mp3-поток (резолвится при воспроизведении)
+  ipcMain.handle('sc:resolveStream', (_e, url: string): Promise<string> => scResolveStream(url))
   ipcMain.handle('playlist:pickCover', async () => {
     const r = await dialog.showOpenDialog(win, {
       properties: ['openFile'],

@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import type { PersistedData, Track } from '@shared/types'
-import { getPersistedBase, setPersistedBase } from './playlistStore'
+import { getPersistedBase, setPersistedBase, persistPatch } from './playlistStore'
+
+/** Внешние (не local/demo) треки — персистятся в importedTracks */
+const isImported = (t: Track): boolean => t.sourceId !== 'local' && t.sourceId !== 'demo'
+
+/** Слияние по id: базовые треки первыми, дубликаты из extra отбрасываются */
+function mergeById(base: Track[], extra: Track[]): Track[] {
+  const known = new Set(base.map((t) => t.id))
+  return [...base, ...extra.filter((t) => !known.has(t.id))]
+}
 
 interface LibraryState {
   tracks: Track[]
@@ -12,17 +21,21 @@ interface LibraryState {
   addTracks: (tracks: Track[]) => void // внешние треки (VK и др.): дописывает, дедуп по id
 }
 
-export const useLibraryStore = create<LibraryState>()((set) => ({
+export const useLibraryStore = create<LibraryState>()((set, get) => ({
   tracks: [],
   loading: true,
   usingDemo: false,
 
   addTracks: (incoming) => {
-    set((state) => {
-      const known = new Set(state.tracks.map((t) => t.id))
-      const fresh = incoming.filter((t) => !known.has(t.id))
-      return fresh.length > 0 ? { tracks: [...state.tracks, ...fresh] } : {}
-    })
+    const fresh = incoming.filter((t) => !get().tracks.some((x) => x.id === t.id))
+    if (fresh.length === 0) return
+    const tracks = [...get().tracks, ...fresh]
+    set({ tracks })
+    // Внешние треки персистим: плейлисты ссылаются на их id, иначе после
+    // рестарта ссылки вели бы в никуда. Стрим-URL VK/SoundCloud сессионные и
+    // со временем протухают — трек останется в библиотеке, а неудача
+    // воспроизведения обрабатывается error-skip в подписках плеера.
+    persistPatch({ importedTracks: tracks.filter(isImported) })
   },
 
   init: async (data) => {
@@ -33,12 +46,15 @@ export const useLibraryStore = create<LibraryState>()((set) => ({
     }
     try {
       const d = data ?? (await window.api.loadData())
+      // Персистенс импортированных треков: докидываем их к отсканированной
+      // библиотеке, чтобы плейлисты с vk:/sc: id ожили после рестарта
+      const imported = d.importedTracks ?? []
       if (d.musicFolders.length === 0) {
         const tracks = await window.api.demoLibrary()
-        set({ tracks, usingDemo: true, loading: false })
+        set({ tracks: mergeById(tracks, imported), usingDemo: true, loading: false })
       } else {
         const tracks = await window.api.scanLibrary(d.musicFolders)
-        set({ tracks, usingDemo: false, loading: false })
+        set({ tracks: mergeById(tracks, imported), usingDemo: false, loading: false })
       }
     } catch (e) {
       console.error('library init failed:', e)
