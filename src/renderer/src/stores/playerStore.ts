@@ -3,6 +3,7 @@ import type { Track, RepeatMode } from '@shared/types'
 import { nextIndex, prevIndex, buildShuffleOrder } from '@shared/queue'
 import { AudioEngine, mediaUrl, clampVolume } from '../audio/engine'
 import { useSettingsStore } from './settingsStore'
+import { recordPlay } from './statsStore'
 
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
@@ -61,7 +62,11 @@ export function createPlayerStore(
   // playTracks/next/prev и при выходе из окна конца трека (новый трек, seek назад).
   let crossfadeDone = false
   const playAt = (state: Pick<PlayerState, 'queue' | 'order'>, pos: number): void => {
-    engine.play(mediaUrl(state.queue[state.order[pos]].filePath))
+    const track = state.queue[state.order[pos]]
+    engine.play(mediaUrl(track.filePath))
+    // Статистика прослушиваний: пишем именно в точке реального старта трека
+    // (playTracks/next/prev). Кроссфейд-пути зовут recordPlay сами (см. ниже).
+    recordPlay(track.id)
   }
 
   return create<PlayerState>()((set, get) => ({
@@ -117,6 +122,7 @@ export function createPlayerStore(
       set({ pos: nextPos, currentSec: 0, playing: true })
       if (xfSec > 0 && engine.crossfadeTo) {
         engine.crossfadeTo(mediaUrl(queue[order[nextPos]].filePath), xfSec)
+        recordPlay(queue[order[nextPos]].id)
         return
       }
       playAt({ queue, order }, nextPos)
@@ -275,6 +281,7 @@ export function createPlayerStore(
       crossfadeDone = true
       set({ pos: nextPos, currentSec: 0, playing: true })
       engine.crossfadeTo(mediaUrl(queue[order[nextPos]].filePath), xfSec)
+      recordPlay(queue[order[nextPos]].id)
     },
   }))
 }

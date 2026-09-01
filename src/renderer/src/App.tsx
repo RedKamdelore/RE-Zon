@@ -7,12 +7,14 @@ import SearchView from './components/SearchView'
 import PlaylistView from './components/PlaylistView'
 import SettingsView from './components/SettingsView'
 import CollectionView from './components/CollectionView'
+import RadioView from './components/RadioView'
 import MiniPlayer from './components/MiniPlayer'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore } from './stores/lyricsStore'
+import { useStatsStore } from './stores/statsStore'
 import { useNavStore, type View } from './stores/navStore'
 
 export type { View }
@@ -34,6 +36,7 @@ export default function App() {
           setPersistedBase(data)
           usePlaylistStore.getState().init(data.playlists)
           useLyricsStore.getState().init(data.lyricsOverrides)
+          useStatsStore.getState().init(data.playStats)
           useSettingsStore.getState().init(data) // применяет appearance к DOM
           usePlayerStore.getState().setVolume(data.volume)
           usePlayerStore.getState().applyEqPreset(data.eqGains)
@@ -101,6 +104,7 @@ export default function App() {
           ))}
         {view.name === 'artist' && <CollectionView kind="artist" name={view.artist} />}
         {view.name === 'album' && <CollectionView kind="album" name={view.album} />}
+        {view.name === 'radio' && <RadioView trackId={view.trackId} />}
       </main>
       {panel && <RightPanel panel={panel} onClose={() => setPanel(null)} />}
       <PlayerBar onTogglePanel={onTogglePanel} />

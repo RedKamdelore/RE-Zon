@@ -135,8 +135,13 @@ function ContextMenu({
           </button>
         )}
         <div className="ctx-sep" />
-        {/* V2-5: радио/рекомендации по треку — пока заглушка */}
-        <button className="ctx-item" disabled title="скоро">
+        <button
+          className="ctx-item"
+          onClick={() => {
+            useNavStore.getState().setView({ name: 'radio', trackId: t.id })
+            onClose()
+          }}
+        >
           Рекомендации по треку
         </button>
         <button

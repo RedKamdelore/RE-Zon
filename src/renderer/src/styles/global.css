@@ -362,6 +362,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- RadioView: строки Last.fm --- */
+.radio-lfm-row.missing {
+  opacity: 0.45;
+  cursor: default;
+}
+.radio-lfm-row.missing:hover {
+  background: transparent;
+}
+
 /* --- SearchView --- */
 .search-view {
   display: flex;

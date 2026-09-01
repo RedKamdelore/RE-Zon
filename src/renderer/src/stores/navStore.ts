@@ -7,6 +7,7 @@ export type View =
   | { name: 'settings' }
   | { name: 'artist'; artist: string }
   | { name: 'album'; album: string; artist?: string }
+  | { name: 'radio'; trackId: string }
 
 interface NavState {
   view: View

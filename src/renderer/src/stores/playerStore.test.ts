@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPlayerStore, initPlayerSubscriptions, type PlayerEngine } from './playerStore'
+import { useStatsStore } from './statsStore'
 import { mediaUrl } from '../audio/engine'
 import type { Track } from '@shared/types'
 
@@ -483,6 +484,50 @@ describe('crossfade', () => {
     expect(calls.play).toHaveLength(2)
     expect(calls.play[1]).toBe(mediaUrl(TRACKS[1].filePath))
     expect(store.getState().pos).toBe(1)
+  })
+})
+
+describe('playStats recording', () => {
+  function makeXf(xfSec: number): ReturnType<typeof makeFakeEngine> & { store: ReturnType<typeof createPlayerStore> } {
+    const fake = makeFakeEngine()
+    const store = createPlayerStore(fake.engine, () => xfSec)
+    return { ...fake, store }
+  }
+
+  beforeEach(() => {
+    useStatsStore.getState().init({})
+  })
+
+  it('playTracks records a play for the started track', () => {
+    const { store } = makeXf(0)
+    store.getState().playTracks(TRACKS, 1)
+    expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
+  })
+
+  it('next/prev record plays for newly started tracks', () => {
+    const { store } = makeXf(0)
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().next({ manual: true })
+    store.getState().prev()
+    const stats = useStatsStore.getState().stats
+    expect(stats['local:t1']?.count).toBe(2) // playTracks + prev
+    expect(stats['local:t2']?.count).toBe(1) // next
+  })
+
+  it('crossfade transition records a play too', () => {
+    const { engine, fire, store } = makeXf(5)
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    ;(engine.element as { currentTime: number }).currentTime = 175
+    fire('timeupdate')
+    expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
+  })
+
+  it('manual next with crossfade records a play', () => {
+    const { store } = makeXf(5)
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().next({ manual: true })
+    expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
   })
 })
 
