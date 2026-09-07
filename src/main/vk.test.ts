@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { vkAudioGetWith, vkAudioGet, type Fetcher } from './vk'
+import { vkAudioGetWith, vkAudioGet, vkAuthUrl, matchVkAuthUrl, type Fetcher } from './vk'
+import { VK_CLIENT_ID, VK_REDIRECT } from '../shared/connections'
 
 function okFetcher(data: unknown): Fetcher {
   return vi.fn(async () => ({ ok: true, status: 200, json: async () => data }))
@@ -165,5 +166,48 @@ describe('vkAudioGet', () => {
     const tracks = await vkAudioGet('TOKEN')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(tracks).toHaveLength(2)
+  })
+})
+
+describe('vkAuthUrl', () => {
+  it('builds Kate Mobile OAuth url with token response and revoke', () => {
+    const url = new URL(vkAuthUrl())
+    expect(url.hostname).toBe('oauth.vk.com')
+    expect(url.pathname).toBe('/authorize')
+    expect(url.searchParams.get('client_id')).toBe(String(VK_CLIENT_ID))
+    expect(url.searchParams.get('response_type')).toBe('token')
+    expect(url.searchParams.get('redirect_uri')).toBe(VK_REDIRECT)
+    expect(url.searchParams.get('revoke')).toBe('1')
+    expect(url.searchParams.get('display')).toBe('page')
+  })
+})
+
+describe('matchVkAuthUrl', () => {
+  const TOKEN = 'abc123'
+  const okUrl = `https://oauth.vk.com/blank.html#access_token=${TOKEN}&expires_in=0&user_id=42`
+
+  it('matches blank.html fragment with access_token', () => {
+    const r = matchVkAuthUrl(okUrl)
+    expect(r).not.toBeNull()
+    expect(r!.token).toBe(TOKEN)
+    expect(r!.userId).toBe('42')
+    expect(r!.expiresIn).toBe(0)
+  })
+
+  it('parses 24h expiry', () => {
+    const r = matchVkAuthUrl(
+      'https://oauth.vk.com/blank.html#access_token=t&expires_in=86400&user_id=7',
+    )
+    expect(r!.expiresIn).toBe(86400)
+  })
+
+  it('ignores non-blank urls', () => {
+    expect(matchVkAuthUrl('https://oauth.vk.com/authorize?client_id=1')).toBeNull()
+    expect(matchVkAuthUrl('https://vk.com/feed')).toBeNull()
+  })
+
+  it('ignores blank.html without token fragment (login error)', () => {
+    expect(matchVkAuthUrl('https://oauth.vk.com/blank.html#error=access_denied')).toBeNull()
+    expect(matchVkAuthUrl('https://oauth.vk.com/blank.html')).toBeNull()
   })
 })

@@ -37,7 +37,7 @@ export interface PlaybackSettings {
 }
 
 export interface PersistedData {
-  version: 3;
+  version: 4;
   musicFolders: string[];
   playlists: Playlist[];
   lyricsOverrides: Record<string, string>;
@@ -47,9 +47,13 @@ export interface PersistedData {
   playback: PlaybackSettings;
   playStats: Record<string, { count: number; lastPlayed: number }>; // для будущих рекомендаций
   lastfmApiKey: string;
+  lastfmApiSecret: string; // для скробблинга/сессии (подпись запросов); '' = нет
   // HTTP-прокси для запросов к Last.fm (Last.fm блокирует API по региону); '' = без прокси
   lastfmProxy: string;
   importSources: Record<string, unknown>;
+  // Подключения сервисов: токены/сессии от кнопок «Подключить» (v3). importSources
+  // с vkToken мигрирует сюда; само поле оставлено для совместимости.
+  connections: Record<string, import('./connections').ServiceConnection>;
   // Импортированные внешние треки (VK, SoundCloud): плейлисты ссылаются на их id,
   // поэтому без персистентности после рестарта ссылки вели бы в никуда.
   importedTracks: Track[];

@@ -6,7 +6,7 @@ import type { PersistedData } from '@shared/types'
 
 function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
   return {
-    version: 3,
+    version: 4,
     musicFolders: ['C:\\Music'],
     playlists: [],
     lyricsOverrides: {},
@@ -16,6 +16,8 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     playback: { crossfadeSec: 0 },
     playStats: {},
     lastfmApiKey: '',
+    lastfmApiSecret: '',
+    connections: {},
     lastfmProxy: '',
     importSources: {},
     importedTracks: [],

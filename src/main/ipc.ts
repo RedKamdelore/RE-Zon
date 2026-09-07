@@ -3,9 +3,11 @@ import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
 import { loadData, saveData } from './persistence'
 import { scanFolders, demoTracks } from './library'
-import { vkAudioGet } from './vk'
+import { vkAudioGet, vkAuthUrl, matchVkAuthUrl } from './vk'
 import { scSearch, scResolveStream } from './soundcloud'
-import { lastfmApi } from './lastfm'
+import { lastfmApi, lfmAuthUrl, matchLfmAuthUrl, lfmGetSession, lfmScrobble, type ScrobblePayload } from './lastfm'
+import { openAuthWindow } from './authWindow'
+import { connectionStatus, type ServiceId } from '../shared/connections'
 import type { PersistedData, LfmCallResult } from '../shared/types'
 import type { VkImportResult, ScSearchResult } from '../shared/matching'
 
@@ -76,4 +78,120 @@ export function registerIpc(win: BrowserWindow): void {
   })
   ipcMain.on('player:cmd', (_e, cmd: string) => win.webContents.send('player:cmd', cmd))
   ipcMain.on('shell:showItemInFolder', (_e, p: string) => shell.showItemInFolder(p))
+
+  // --- Подключения сервисов (V3-3) ------------------------------------------
+
+  /** Статусы всех сервисов: connected-флаги без токенов */
+  ipcMain.handle('connections:list', () => {
+    const conns = loadData().connections
+    const out: Record<string, ReturnType<typeof connectionStatus>> = {}
+    for (const id of ['vk', 'lastfm', 'spotify', 'yandex'] as ServiceId[]) {
+      out[id] = connectionStatus(conns, id)
+    }
+    return out
+  })
+
+  /** Записывает/заменяет подключение (токен уже получен) в persistence */
+  ipcMain.handle(
+    'connections:save',
+    (_e, id: ServiceId, conn: { token: string; userId?: string; refreshToken?: string }) => {
+      const data = loadData()
+      const connections = {
+        ...data.connections,
+        [id]: { token: conn.token, connectedAt: Date.now(), userId: conn.userId, refreshToken: conn.refreshToken },
+      }
+      saveData({ ...data, connections })
+      return connectionStatus(connections, id)
+    },
+  )
+
+  /** Удаляет подключение сервиса */
+  ipcMain.handle('connections:disconnect', (_e, id: ServiceId) => {
+    const data = loadData()
+    const connections = { ...data.connections }
+    delete connections[id]
+    saveData({ ...data, connections })
+    return true
+  })
+
+  /** Запоминает имя плейлиста последнего импорта (реимпорт обновит его) */
+  ipcMain.handle('connections:setPlaylistName', (_e, id: ServiceId, name: string) => {
+    const data = loadData()
+    const prev = data.connections[id]
+    if (!prev) return false
+    saveData({
+      ...data,
+      connections: { ...data.connections, [id]: { ...prev, playlistName: name } },
+    })
+    return true
+  })
+
+  /** OAuth VK: окно → fragment access_token → сохраняем соединение */
+  ipcMain.handle('connect:vk', async (): Promise<{ ok: boolean; error?: string; userId?: string }> => {
+    const auth = (await openAuthWindow(win, {
+      url: vkAuthUrl(),
+      title: 'Вход ВКонтакте',
+      match: matchVkAuthUrl,
+    })) as Awaited<ReturnType<typeof matchVkAuthUrl>> | null
+    if (!auth) return { ok: false, error: 'Авторизация не завершена' }
+    const data = loadData()
+    saveData({
+      ...data,
+      connections: {
+        ...data.connections,
+        vk: { token: auth.token, connectedAt: Date.now(), userId: auth.userId },
+      },
+    })
+    return { ok: true, userId: auth.userId }
+  })
+
+  /** OAuth Last.fm: окно → token → auth.getSession → бессрочная сессия */
+  ipcMain.handle('connect:lastfm', async (): Promise<{ ok: boolean; error?: string; username?: string }> => {
+    const data = loadData()
+    const apiKey = data.lastfmApiKey
+    if (!apiKey) return { ok: false, error: 'Сначала введите API key в полях ниже' }
+    const token = (await openAuthWindow(win, {
+      url: lfmAuthUrl(apiKey),
+      title: 'Вход Last.fm',
+      width: 480,
+      height: 640,
+      match: matchLfmAuthUrl,
+    })) as string | null
+    if (!token) return { ok: false, error: 'Авторизация не завершена' }
+    try {
+      const session = await lfmGetSession(apiKey, data.lastfmApiSecret, token, data.lastfmProxy)
+      saveData({
+        ...data,
+        connections: {
+          ...data.connections,
+          lastfm: { token: session.key, connectedAt: Date.now(), userId: session.username },
+        },
+      })
+      return { ok: true, username: session.username }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  /** Скробблинг (V3-4): батч прослушанных треков в Last.fm-профиль */
+  ipcMain.handle(
+    'lastfm:scrobble',
+    async (_e, scrobbles: ScrobblePayload[]): Promise<{ ok: boolean; count?: number; error?: string }> => {
+      try {
+        const data = loadData()
+        const sk = data.connections.lastfm?.token
+        if (!sk) return { ok: false, error: 'Last.fm не подключён' }
+        const count = await lfmScrobble(
+          data.lastfmApiKey,
+          data.lastfmApiSecret,
+          sk,
+          data.lastfmProxy,
+          scrobbles,
+        )
+        return { ok: true, count }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    },
+  )
 }

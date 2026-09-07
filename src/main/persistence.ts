@@ -3,9 +3,10 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs'
 import { join } from 'path'
 import type { PersistedData } from '../shared/types'
 import { BUILTIN_PRESETS, defaultTheme } from '../shared/themeModel'
+import { migrateImportSources, type Connections } from '../shared/connections'
 
 export const DEFAULT_DATA: PersistedData = {
-  version: 3,
+  version: 4,
   musicFolders: [],
   playlists: [],
   lyricsOverrides: {},
@@ -15,8 +16,10 @@ export const DEFAULT_DATA: PersistedData = {
   playback: { crossfadeSec: 0 },
   playStats: {},
   lastfmApiKey: '',
+  lastfmApiSecret: '',
   lastfmProxy: '',
   importSources: {},
+  connections: {},
   importedTracks: [],
   hiddenTracks: [],
 }
@@ -29,20 +32,22 @@ interface AppearanceSettingsV2 {
   scale: number;
 }
 
-/** Формат файла player-data.json v2 (до V3-1) */
-export interface PersistedDataV2 {
-  version: 2;
+/** Формат файла player-data.json v2/v3 (до V3-3) — без connections/lastfmApiSecret */
+export interface PersistedDataV3 {
+  version: 2 | 3;
   musicFolders?: string[];
   playlists?: PersistedData['playlists'];
   lyricsOverrides?: Record<string, string>;
   volume?: number;
   eqGains?: number[];
-  appearance?: AppearanceSettingsV2;
+  appearance?: AppearanceSettingsV2 | PersistedData['appearance'];
   playback?: PersistedData['playback'];
   playStats?: PersistedData['playStats'];
   lastfmApiKey?: string;
+  lastfmApiSecret?: string;
   lastfmProxy?: string;
   importSources?: Record<string, unknown>;
+  connections?: PersistedData['connections'];
   importedTracks?: PersistedData['importedTracks'];
   hiddenTracks?: PersistedData['hiddenTracks'];
 }
@@ -58,7 +63,7 @@ interface PersistedDataV1 {
 }
 
 /** Миграция v1 → v2: старые поля сохраняются, новые заполняются дефолтами */
-export function migrateV1toV2(data: Partial<PersistedDataV1>): PersistedDataV2 {
+export function migrateV1toV2(data: Partial<PersistedDataV1>): Omit<PersistedDataV3, 'version'> & { version: 2 } {
   return {
     version: 2,
     musicFolders: data.musicFolders ?? [],
@@ -74,8 +79,8 @@ export function migrateV1toV2(data: Partial<PersistedDataV1>): PersistedDataV2 {
  * превращается в движок тем — theme = пресет скина с применёнными
  * accent/radius пользователя. Неизвестный skin → дефолтная тема.
  */
-export function migrateV2toV3(data: Partial<PersistedDataV2>): PersistedData {
-  const old = data.appearance
+export function migrateV2toV3(data: Partial<PersistedDataV3>): Omit<PersistedData, 'version' | 'connections' | 'lastfmApiSecret'> & { version: 3 } {
+  const old = data.appearance as AppearanceSettingsV2 | undefined
   const skin = old?.skin ?? 'spotify-dark'
   const base = BUILTIN_PRESETS[skin] ?? defaultTheme()
   return {
@@ -88,16 +93,37 @@ export function migrateV2toV3(data: Partial<PersistedDataV2>): PersistedData {
       customThemes: {},
       scale: old?.scale ?? 1,
     },
+  } as Omit<PersistedData, 'version' | 'connections' | 'lastfmApiSecret'> & { version: 3 }
+}
+
+/**
+ * Миграция v3 → v4: connections из кнопок «Подключить» + lastfmApiSecret.
+ * importSources.vkToken (ручной ввод) переносится в connections.vk,
+ * чтобы старый ручной токен продолжил работать через новую карточку.
+ */
+export function migrateV3toV4(
+  data: Partial<PersistedDataV3> | (Omit<PersistedData, 'version'> & { version: 3 }),
+): PersistedData {
+  const v3 = migrateV2toV3(data as Partial<PersistedDataV3>)
+  const migrated = migrateImportSources(v3.importSources ?? {})
+  // Ручные connections уже есть (мог быть частичный v4 с version 3) — не затираем
+  const existing = (data as Partial<PersistedData>).connections ?? {}
+  const connections: Connections = { ...migrated, ...existing }
+  return {
+    ...v3,
+    version: 4,
+    lastfmApiSecret: data.lastfmApiSecret ?? '',
+    connections,
   }
 }
 
-/** Чистая функция — тестируется без Electron. Принимает v1/v2 (мигрирует) и v3 */
+/** Чистая функция — тестируется без Electron. Принимает v1/v2/v3/v4 (мигрирует) */
 export function mergeWithDefaults(
-  raw: Partial<PersistedData> | Partial<PersistedDataV2> | Partial<PersistedDataV1> | null,
+  raw: Partial<PersistedData> | Partial<PersistedDataV3> | Partial<PersistedDataV1> | null,
 ): PersistedData {
-  if (raw && raw.version === 1) return migrateV2toV3(migrateV1toV2(raw))
-  if (raw && raw.version === 2) return migrateV2toV3(raw as Partial<PersistedDataV2>)
-  return { ...DEFAULT_DATA, ...(raw ?? {}), version: 3 } as PersistedData
+  if (raw && raw.version === 1) return migrateV3toV4(migrateV2toV3(migrateV1toV2(raw)))
+  if (raw && (raw.version === 2 || raw.version === 3)) return migrateV3toV4(raw as Partial<PersistedDataV3>)
+  return { ...DEFAULT_DATA, ...(raw ?? {}), version: 4 } as PersistedData
 }
 
 let cache: PersistedData | null = null

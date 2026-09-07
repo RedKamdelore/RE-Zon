@@ -1,4 +1,5 @@
 import type { ImportedTrack } from '../shared/matching'
+import { VK_CLIENT_ID, VK_REDIRECT, VK_SCOPE } from '../shared/connections'
 
 /**
  * VK audio.get через пользовательский токен standalone-приложения.
@@ -112,4 +113,38 @@ export async function vkAudioGetWith(
 
 export function vkAudioGet(token: string): Promise<ImportedTrack[]> {
   return vkAudioGetWith((url) => fetch(url), token)
+}
+
+// --- OAuth-флоу «Подключить VK» (V3-3) --------------------------------------
+
+/** URL открытия окна авторизации VK (Kate Mobile, как в vkhost) */
+export function vkAuthUrl(): string {
+  return (
+    `https://oauth.vk.com/authorize?client_id=${VK_CLIENT_ID}&scope=${VK_SCOPE}` +
+    `&redirect_uri=${encodeURIComponent(VK_REDIRECT)}&display=page&response_type=token&revoke=1`
+  )
+}
+
+export interface VkAuthResult {
+  token: string
+  userId: string
+  expiresIn: number // сек; 0 — бессрочный (offline-право)
+}
+
+/**
+ * Матчит URL blank-страницы VK: токен приходит в fragment
+ * (#access_token=…&user_id=…). null — ещё не доехали.
+ */
+export function matchVkAuthUrl(url: string): VkAuthResult | null {
+  if (!url.startsWith('https://oauth.vk.com/blank.html')) return null
+  const fragment = url.split('#')[1]
+  if (!fragment || !fragment.includes('access_token=')) return null
+  const params = new URLSearchParams(fragment)
+  const token = params.get('access_token')
+  if (!token) return null
+  return {
+    token,
+    userId: params.get('user_id') ?? '',
+    expiresIn: Number(params.get('expires_in') ?? '0'),
+  }
 }

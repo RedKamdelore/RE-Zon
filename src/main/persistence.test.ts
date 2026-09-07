@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getPath: () => '' } }))
 
-import { mergeWithDefaults, migrateV1toV2, migrateV2toV3, DEFAULT_DATA } from './persistence'
+import {
+  mergeWithDefaults,
+  migrateV1toV2,
+  migrateV2toV3,
+  migrateV3toV4,
+  DEFAULT_DATA,
+} from './persistence'
 import { BUILTIN_PRESETS, defaultTheme } from '../shared/themeModel'
 import type { PersistedData } from '../shared/types'
 
@@ -10,9 +16,11 @@ describe('mergeWithDefaults', () => {
   it('null returns defaults', () => {
     expect(mergeWithDefaults(null)).toEqual(DEFAULT_DATA)
   })
-  it('defaults are version 3 with theme engine appearance', () => {
+  it('defaults are version 4 with empty connections', () => {
     const d = mergeWithDefaults(null)
-    expect(d.version).toBe(3)
+    expect(d.version).toBe(4)
+    expect(d.connections).toEqual({})
+    expect(d.lastfmApiSecret).toBe('')
     expect(d.appearance).toEqual({
       skin: 'spotify-dark',
       theme: defaultTheme(),
@@ -26,18 +34,18 @@ describe('mergeWithDefaults', () => {
     expect(d.importSources).toEqual({})
     expect(d.importedTracks).toEqual([])
   })
-  it('partial v3 data merges with defaults', () => {
+  it('partial v4 data merges with defaults', () => {
     const r = mergeWithDefaults({ volume: 0.5, musicFolders: ['D:\\Music'] })
     expect(r.volume).toBe(0.5)
     expect(r.musicFolders).toEqual(['D:\\Music'])
     expect(r.playlists).toEqual([])
-    expect(r.version).toBe(3)
+    expect(r.version).toBe(4)
   })
   it('eqGains default has 10 zeros', () => {
     expect(mergeWithDefaults(null).eqGains).toHaveLength(10)
   })
-  it('v3 data passes through unchanged', () => {
-    const v3: PersistedData = {
+  it('v4 data passes through unchanged', () => {
+    const v4: PersistedData = {
       ...DEFAULT_DATA,
       volume: 0.3,
       appearance: {
@@ -49,7 +57,8 @@ describe('mergeWithDefaults', () => {
       playback: { crossfadeSec: 5 },
       playStats: { 'local:x': { count: 3, lastPlayed: 123 } },
       lastfmApiKey: 'key',
-      importSources: { vk: { token: 't' } },
+      lastfmApiSecret: 'sec',
+      connections: { vk: { token: 't', connectedAt: 42, userId: '7' } },
       importedTracks: [
         {
           id: 'vk:1_2',
@@ -62,7 +71,7 @@ describe('mergeWithDefaults', () => {
         },
       ],
     }
-    expect(mergeWithDefaults(v3)).toEqual(v3)
+    expect(mergeWithDefaults(v4)).toEqual(v4)
   })
   it('v2-shaped data migrates to v3 keeping old values', () => {
     const v2 = {
@@ -81,7 +90,7 @@ describe('mergeWithDefaults', () => {
       importedTracks: [],
     }
     const r = mergeWithDefaults(v2)
-    expect(r.version).toBe(3)
+    expect(r.version).toBe(4)
     expect(r.musicFolders).toEqual(['C:\\Tunes'])
     expect(r.playlists).toEqual(v2.playlists)
     expect(r.volume).toBe(0.4)
@@ -98,23 +107,24 @@ describe('mergeWithDefaults', () => {
       radius: 12,
     })
     expect(r.hiddenTracks).toEqual([])
+    expect(r.connections).toEqual({})
   })
   it('v2 data with unknown skin falls back to default theme', () => {
     const r = mergeWithDefaults({
       version: 2 as const,
       appearance: { skin: 'no-such-skin', accent: '#FF0000', radius: 4, scale: 1 },
     })
-    expect(r.version).toBe(3)
+    expect(r.version).toBe(4)
     expect(r.appearance.skin).toBe('no-such-skin')
     expect(r.appearance.theme).toEqual({ ...defaultTheme(), accent: '#FF0000', radius: 4 })
   })
   it('v2 data without appearance gets default appearance', () => {
     const r = mergeWithDefaults({ version: 2 as const, volume: 0.1 })
-    expect(r.version).toBe(3)
+    expect(r.version).toBe(4)
     expect(r.volume).toBe(0.1)
     expect(r.appearance).toEqual(DEFAULT_DATA.appearance)
   })
-  it('v1-shaped data migrates to v3 keeping old values', () => {
+  it('v1-shaped data migrates to v4 keeping old values', () => {
     const v1 = {
       version: 1 as const,
       musicFolders: ['C:\\Tunes'],
@@ -124,7 +134,7 @@ describe('mergeWithDefaults', () => {
       eqGains: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     }
     const r = mergeWithDefaults(v1)
-    expect(r.version).toBe(3)
+    expect(r.version).toBe(4)
     expect(r.musicFolders).toEqual(['C:\\Tunes'])
     expect(r.playlists).toEqual(v1.playlists)
     expect(r.lyricsOverrides).toEqual({ t1: 'la' })
@@ -137,10 +147,29 @@ describe('mergeWithDefaults', () => {
     expect(r.lastfmApiKey).toBe('')
     expect(r.importSources).toEqual({})
     expect(r.importedTracks).toEqual([])
+    expect(r.connections).toEqual({})
   })
   it('defaults hiddenTracks to empty for v3 data without the field', () => {
     // файл v3, записанный до V3-2, не содержит hiddenTracks — подставляется дефолт
     expect(mergeWithDefaults({ version: 3, volume: 0.5 }).hiddenTracks).toEqual([])
+  })
+  it('v3 importSources.vkToken migrates into connections.vk', () => {
+    // V3-0 формат: токен VK хранился в importSources.vkToken
+    const r = mergeWithDefaults({ version: 3 as const, importSources: { vkToken: 'tok3n' } })
+    expect(r.version).toBe(4)
+    expect(r.connections.vk).toEqual({ token: 'tok3n', connectedAt: 0 })
+  })
+  it('v3 with existing connections keeps them (no importSources override)', () => {
+    const r = mergeWithDefaults({
+      version: 3 as const,
+      importSources: { vkToken: 'old' },
+      connections: { vk: { token: 'new', connectedAt: 5 } },
+    })
+    expect(r.connections.vk).toEqual({ token: 'new', connectedAt: 5 })
+  })
+  it('v3 lastfmApiSecret carries over to v4', () => {
+    const r = mergeWithDefaults({ version: 3 as const, lastfmApiSecret: 'shh' })
+    expect(r.lastfmApiSecret).toBe('shh')
   })
 })
 
@@ -178,5 +207,27 @@ describe('migrateV2toV3', () => {
   it('fills missing appearance pieces with defaults', () => {
     const r = migrateV2toV3({ version: 2 })
     expect(r.appearance).toEqual(DEFAULT_DATA.appearance)
+  })
+})
+
+describe('migrateV3toV4', () => {
+  it('adds connections, lastfmApiSecret and bumps version', () => {
+    const r = migrateV3toV4({ version: 3, lastfmApiKey: 'k', lastfmApiSecret: 's' })
+    expect(r.version).toBe(4)
+    expect(r.connections).toEqual({})
+    expect(r.lastfmApiSecret).toBe('s')
+    expect(r.lastfmApiKey).toBe('k')
+  })
+  it('moves importSources.vkToken to connections.vk', () => {
+    const r = migrateV3toV4({ version: 3, importSources: { vkToken: 'abc' } })
+    expect(r.connections.vk).toEqual({ token: 'abc', connectedAt: 0 })
+  })
+  it('preserves full connections and does not invent others', () => {
+    const conns = {
+      lastfm: { token: 'sess', connectedAt: 1, userId: 'Red' },
+      spotify: { token: 'x', connectedAt: 2, refreshToken: 'r' },
+    }
+    const r = migrateV3toV4({ version: 3, connections: conns })
+    expect(r.connections).toEqual(conns)
   })
 })
