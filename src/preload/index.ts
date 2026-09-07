@@ -52,6 +52,12 @@ const api = {
     | { ok: true; playlists: Array<{ id: string; name: string; tracks: Array<{ title: string; artist: string }> }> }
     | { ok: false; error: string }
   > => ipcRenderer.invoke('spotify:import'),
+  connectYandex: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('connect:yandex'),
+  yandexImport: (): Promise<
+    | { ok: true; likes: Array<{ title: string; artist: string }> }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke('yandex:import'),
   onPlayerCommand: (cb: (cmd: string) => void) => {
     const listener = (_e: IpcRendererEvent, cmd: string): void => cb(cmd)
     ipcRenderer.on('player:cmd', listener)

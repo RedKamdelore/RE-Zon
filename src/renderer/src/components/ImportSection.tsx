@@ -19,6 +19,7 @@ export default function ImportSection() {
       <h2>Импорт</h2>
       <VkCard />
       <SpotifyCard />
+      <YandexCard />
       <LastfmCard />
       <ScCard />
     </section>
@@ -535,6 +536,114 @@ function SpotifyCard() {
         Импортируются метаданные плейлистов: треки матчатся с вашей библиотекой по
         названию. Стриминг музыки из Spotify не поддерживается (нужен Premium +
         закрытый API) — плейлист собирается из локальных совпадений.
+      </p>
+      {error && <div className="import-status import-error">{error}</div>}
+      {statusMsg && <div className="import-status">{statusMsg}</div>}
+    </ProviderCard>
+  )
+}
+
+// --- Яндекс Музыка (вход Яндекс ID + «Мне нравится» с матчингом) ---------------
+
+function YandexCard() {
+  const status = useConnectionsStore((s) => s.statuses.yandex)
+  const [busy, setBusy] = useState<string | null>(null) // 'connect' | 'import'
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const connect = async (): Promise<void> => {
+    if (!window.api || busy !== null) return
+    setBusy('connect')
+    setError(null)
+    setStatusMsg(null)
+    try {
+      const res = await window.api.connectYandex()
+      if (!res.ok) {
+        setError(res.error ?? 'Не удалось подключить Яндекс')
+        return
+      }
+      await useConnectionsStore.getState().refresh()
+      setStatusMsg('Яндекс подключён — можно импортировать «Мне нравится»')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const disconnect = async (): Promise<void> => {
+    if (!window.api || busy !== null) return
+    await useConnectionsStore.getState().disconnect('yandex')
+    setStatusMsg('Яндекс отключён')
+  }
+
+  const doImport = async (): Promise<void> => {
+    if (!window.api || busy !== null || !status?.connected) return
+    setBusy('import')
+    setError(null)
+    setStatusMsg(null)
+    try {
+      const res = await window.api.yandexImport()
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      // Лайки — метаданные: матчим с библиотекой по названию/исполнителю
+      const library = useLibraryStore.getState().tracks
+      const matches: Track[] = []
+      for (const like of res.likes) {
+        const found = library.find(
+          (x) =>
+            x.title.toLowerCase() === like.title.toLowerCase() &&
+            x.artist.toLowerCase() === like.artist.split(',')[0].trim().toLowerCase(),
+        )
+        if (found) matches.push(found)
+      }
+      if (matches.length === 0) {
+        setStatusMsg(
+          res.likes.length === 0
+            ? 'В «Мне нравится» пусто'
+            : `Совпадений с библиотекой: 0 из ${res.likes.length} (стриминга из Яндекса нет — только матчинг)`,
+        )
+        return
+      }
+      const name = upsertServicePlaylist('yandex', matches, () => 'Яндекс: Мне нравится')
+      void window.api.connectionsSetPlaylistName('yandex', name)
+      void useConnectionsStore.getState().refresh()
+      const playlistId = usePlaylistStore.getState().playlists.find((p) => p.name === name)?.id
+      if (playlistId) useNavStore.getState().setView({ name: 'playlist', id: playlistId })
+      setStatusMsg(
+        `«${name}»: ${matches.length} из ${res.likes.length} ${plural(res.likes.length, 'лайка', 'лайка', 'лайков')} найдено в библиотеке`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <ProviderCard name="Яндекс Музыка">
+      <StatusLine status={status} />
+      <div className="import-actions">
+        {status?.connected ? (
+          <>
+            <button className="btn-outline" disabled={busy !== null} onClick={() => void doImport()}>
+              {busy === 'import' ? 'Импорт…' : status.playlistName ? 'Обновить лайки' : 'Импортировать «Мне нравится»'}
+            </button>
+            <button className="btn-outline" disabled={busy !== null} onClick={() => void disconnect()}>
+              Отключить
+            </button>
+          </>
+        ) : (
+          <button className="btn-outline" disabled={busy !== null} onClick={() => void connect()}>
+            {busy === 'connect' ? 'Ожидание входа…' : 'Подключить Яндекс'}
+          </button>
+        )}
+      </div>
+      <p className="muted import-note">
+        Вход через Яндекс ID. Импортируются метаданные «Мне нравится» — треки
+        матчатся с вашей библиотекой по названию (стриминга из Яндекса нет).
       </p>
       {error && <div className="import-status import-error">{error}</div>}
       {statusMsg && <div className="import-status">{statusMsg}</div>}

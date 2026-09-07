@@ -16,6 +16,7 @@ import {
   spPlaylists,
   spPlaylistTracks,
 } from './spotify'
+import { yaAuthUrl, matchYaAuthUrl, yaExchange, yaRefresh, yaLikes, type YaLikeTrack } from './yandex'
 import { connectionStatus, type ServiceId } from '../shared/connections'
 import type { PersistedData, LfmCallResult } from '../shared/types'
 import type { VkImportResult, ScSearchResult } from '../shared/matching'
@@ -310,6 +311,67 @@ export function registerIpc(win: BrowserWindow): void {
         out.push({ id: pl.id, name: pl.name, tracks: await spPlaylistTracks(tokens.accessToken, pl.id) })
       }
       return { ok: true, playlists: out }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  // --- Яндекс Музыка (V3-3e) --------------------------------------------------
+
+  /** OAuth Яндекс ID: окно → код → токены. Лайки импортируются отдельно. */
+  ipcMain.handle('connect:yandex', async (): Promise<{ ok: boolean; error?: string }> => {
+    const code = (await openAuthWindow(win, {
+      url: yaAuthUrl(),
+      title: 'Вход Яндекс ID',
+      width: 480,
+      height: 640,
+      match: matchYaAuthUrl,
+    })) as string | null
+    if (!code) return { ok: false, error: 'Авторизация не завершена' }
+    try {
+      const tokens = await yaExchange(code)
+      const data = loadData()
+      saveData({
+        ...data,
+        connections: {
+          ...data.connections,
+          yandex: {
+            token: tokens.accessToken,
+            connectedAt: Date.now(),
+            refreshToken: tokens.refreshToken,
+          },
+        },
+      })
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  /** Импорт «Мне нравится»: refresh токена при необходимости + лайки */
+  ipcMain.handle('yandex:import', async (): Promise<
+    { ok: true; likes: YaLikeTrack[] } | { ok: false; error: string }
+  > => {
+    const data = loadData()
+    const conn = data.connections.yandex
+    if (!conn?.refreshToken) return { ok: false, error: 'Яндекс Музыка не подключён' }
+    try {
+      // access-токен живёт ~1 год, но подстрахуемся refresh-ом при 401
+      let likes: YaLikeTrack[]
+      try {
+        likes = await yaLikes(conn.token)
+      } catch {
+        const tokens = await yaRefresh(conn.refreshToken)
+        saveData({
+          ...data,
+          connections: {
+            ...data.connections,
+            yandex: { ...conn, token: tokens.accessToken, refreshToken: tokens.refreshToken },
+          },
+        })
+        likes = await yaLikes(tokens.accessToken)
+      }
+      return { ok: true, likes }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
