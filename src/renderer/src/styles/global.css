@@ -1397,3 +1397,64 @@ body {
 .import-error {
   color: var(--danger, #ef4444);
 }
+
+/* --- Редактор тем (V3-1) --- */
+.skin-card {
+  position: relative;
+}
+
+.skin-card-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: var(--hover-overlay);
+}
+
+.skin-card-delete:hover {
+  color: var(--text-primary);
+}
+
+.skin-swatch-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--slider-track);
+  color: var(--text-secondary);
+  font-size: 24px;
+}
+
+.theme-save-card {
+  gap: 8px;
+  cursor: default;
+}
+
+.theme-name-input {
+  width: 112px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.theme-btn-row {
+  padding: 0;
+}
+
+.theme-color-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 4px 0 8px;
+}
+
+.theme-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}

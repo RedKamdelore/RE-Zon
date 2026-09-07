@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AppearanceSettings, PersistedData, PlaybackSettings } from '@shared/types'
-import { applyAppearance, DEFAULT_APPEARANCE } from '../theme'
+import { BUILTIN_PRESETS, defaultTheme, type ThemeConfig } from '@shared/themeModel'
+import { applyScale, applyTheme, DEFAULT_APPEARANCE } from '../theme'
 import { persistPatch } from './playlistStore'
 
 interface SettingsState {
@@ -9,21 +10,27 @@ interface SettingsState {
   lastfmApiKey: string
   lastfmProxy: string
   init: (data: PersistedData) => void // вызывается из App после единственного loadData
+  /** Выбор пресета (встроенного или пользовательского): загружает его в редактор */
   setSkin: (skin: string) => void
+  /** Живая правка активной темы (материал, фон, цвета, радиус) */
+  patchTheme: (patch: Partial<ThemeConfig>) => void
   setAccent: (hex: string) => void
   setRadius: (px: number) => void
   setScale: (v: number) => void
+  /** Сохраняет текущий конфиг темы под именем и делает его активным */
+  saveCustomTheme: (name: string) => void
+  deleteCustomTheme: (name: string) => void
   setCrossfadeSec: (sec: number) => void
   setLastfmKey: (key: string) => void
   setLastfmProxy: (proxy: string) => void
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => {
-  /** Обновляет appearance, применяет к DOM и планирует persist (debounced) */
-  const patchAppearance = (patch: Partial<AppearanceSettings>): void => {
-    const appearance = { ...get().appearance, ...patch }
+  /** Применяет appearance к DOM (тема + масштаб) и планирует persist (debounced) */
+  const commitAppearance = (appearance: AppearanceSettings): void => {
     set({ appearance })
-    applyAppearance(appearance)
+    applyTheme(appearance.theme)
+    applyScale(appearance.scale)
     persistPatch({ appearance })
   }
 
@@ -40,13 +47,48 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
         lastfmApiKey: data.lastfmApiKey,
         lastfmProxy: data.lastfmProxy,
       })
-      applyAppearance(data.appearance)
+      applyTheme(data.appearance.theme)
+      applyScale(data.appearance.scale)
     },
 
-    setSkin: (skin) => patchAppearance({ skin }),
-    setAccent: (hex) => patchAppearance({ accent: hex }),
-    setRadius: (px) => patchAppearance({ radius: px }),
-    setScale: (v) => patchAppearance({ scale: v }),
+    setSkin: (skin) => {
+      const { appearance } = get()
+      const preset = BUILTIN_PRESETS[skin] ?? appearance.customThemes[skin]
+      if (!preset) return
+      commitAppearance({ ...appearance, skin, theme: { ...preset } })
+    },
+
+    patchTheme: (patch) => {
+      const { appearance } = get()
+      commitAppearance({ ...appearance, theme: { ...appearance.theme, ...patch } })
+    },
+
+    setAccent: (hex) => get().patchTheme({ accent: hex }),
+    setRadius: (px) => get().patchTheme({ radius: px }),
+    setScale: (v) => commitAppearance({ ...get().appearance, scale: v }),
+
+    saveCustomTheme: (name) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      const { appearance } = get()
+      commitAppearance({
+        ...appearance,
+        skin: trimmed,
+        customThemes: { ...appearance.customThemes, [trimmed]: { ...appearance.theme } },
+      })
+    },
+
+    deleteCustomTheme: (name) => {
+      const { appearance } = get()
+      const customThemes = { ...appearance.customThemes }
+      delete customThemes[name]
+      // Удалили активную тему — откат на дефолтный пресет
+      if (appearance.skin === name) {
+        commitAppearance({ ...appearance, skin: 'spotify-dark', theme: defaultTheme(), customThemes })
+      } else {
+        commitAppearance({ ...appearance, customThemes })
+      }
+    },
 
     setCrossfadeSec: (sec) => {
       const playback = { crossfadeSec: sec }

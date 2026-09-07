@@ -1,61 +1,66 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest'
-import { lightenHex, applyAppearance, DEFAULT_APPEARANCE } from './theme'
+import { lightenHex, applyTheme, applyScale, DEFAULT_APPEARANCE } from './theme'
+import { defaultTheme, themeToCss } from '@shared/themeModel'
 
-describe('lightenHex', () => {
+describe('lightenHex (re-export)', () => {
   it('lightens black towards white', () => {
     expect(lightenHex('#000000', 0.5)).toBe('#808080')
   })
-  it('amount 0 returns the same color', () => {
-    expect(lightenHex('#1DB954', 0)).toBe('#1db954')
-  })
-  it('amount 1 returns white', () => {
-    expect(lightenHex('#123456', 1)).toBe('#ffffff')
-  })
-  it('lightens Spotify green ~8%', () => {
-    // 0x1D=29→47 (0x2F); 0xB9=185→191 (0xBF); 0x54=84→98 (0x62)
-    expect(lightenHex('#1DB954', 0.08)).toBe('#2fbf62')
-  })
-  it('clamps and accepts mixed case', () => {
-    expect(lightenHex('#FF00AA', 2)).toBe('#ffffff')
-  })
-  it('supports 3-digit hex', () => {
-    expect(lightenHex('#000', 0.5)).toBe('#808080')
-  })
 })
 
-describe('applyAppearance', () => {
+describe('applyTheme', () => {
   beforeEach(() => {
+    document.head.innerHTML = ''
     document.documentElement.removeAttribute('data-skin')
     document.documentElement.removeAttribute('style')
     document.body.innerHTML = '<div id="root"></div>'
   })
 
-  it('sets data-skin attribute on documentElement', () => {
-    applyAppearance({ ...DEFAULT_APPEARANCE, skin: 'midnight' })
-    expect(document.documentElement.getAttribute('data-skin')).toBe('midnight')
+  it('injects style#rezon-theme with generated CSS', () => {
+    applyTheme(defaultTheme())
+    const el = document.getElementById('rezon-theme') as HTMLStyleElement
+    expect(el).not.toBeNull()
+    expect(el.tagName).toBe('STYLE')
+    expect(el.textContent).toBe(themeToCss(defaultTheme()))
+    expect(el.textContent).toContain('--bg-app: #121212')
   })
 
-  it('sets accent and lightened accent-hover vars on :root', () => {
-    applyAppearance({ ...DEFAULT_APPEARANCE, accent: '#8B5CF6' })
-    const style = document.documentElement.style
-    expect(style.getPropertyValue('--accent')).toBe('#8B5CF6')
-    expect(style.getPropertyValue('--accent-hover')).toBe(lightenHex('#8B5CF6', 0.08))
+  it('replaces previous style on re-apply (no duplicates)', () => {
+    applyTheme(defaultTheme())
+    applyTheme({ ...defaultTheme(), accent: '#8B5CF6' })
+    const els = document.querySelectorAll('#rezon-theme')
+    expect(els).toHaveLength(1)
+    expect((els[0] as HTMLStyleElement).textContent).toContain('--accent: #8B5CF6')
   })
 
-  it('sets radius var in px', () => {
-    applyAppearance({ ...DEFAULT_APPEARANCE, radius: 14 })
-    expect(document.documentElement.style.getPropertyValue('--radius-card')).toBe('14px')
+  it('does not set legacy data-skin attribute', () => {
+    applyTheme(defaultTheme())
+    expect(document.documentElement.getAttribute('data-skin')).toBeNull()
+  })
+})
+
+describe('applyScale', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="root"></div>'
   })
 
   it('zooms #root by scale', () => {
-    applyAppearance({ ...DEFAULT_APPEARANCE, scale: 1.1 })
-    const root = document.getElementById('root') as HTMLElement
-    expect(root.style.zoom).toBe('1.1')
+    applyScale(1.1)
+    expect((document.getElementById('root') as HTMLElement).style.zoom).toBe('1.1')
   })
 
   it('does not throw without #root', () => {
     document.body.innerHTML = ''
-    expect(() => applyAppearance(DEFAULT_APPEARANCE)).not.toThrow()
+    expect(() => applyScale(1)).not.toThrow()
+  })
+})
+
+describe('DEFAULT_APPEARANCE', () => {
+  it('is spotify-dark preset with default theme', () => {
+    expect(DEFAULT_APPEARANCE.skin).toBe('spotify-dark')
+    expect(DEFAULT_APPEARANCE.theme).toEqual(defaultTheme())
+    expect(DEFAULT_APPEARANCE.customThemes).toEqual({})
+    expect(DEFAULT_APPEARANCE.scale).toBe(1)
   })
 })

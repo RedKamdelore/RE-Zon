@@ -23,10 +23,12 @@ export type RepeatMode = 'off' | 'all' | 'one';
 /** Результат IPC lastfm:call — сырой JSON Last.fm или читаемая ошибка */
 export type LfmCallResult = { ok: true; data: unknown } | { ok: false; error: string };
 
+import type { ThemeConfig } from './themeModel'
+
 export interface AppearanceSettings {
-  skin: string; // 'spotify-dark' | 'light' | 'midnight' | 'frutiger-aero' | 'liquid-glass'
-  accent: string; // hex
-  radius: number; // px, базовый радиус карточек
+  skin: string // id выбранного пресета (встроенного или из customThemes)
+  theme: ThemeConfig; // активный конфиг темы (редактируется живьём)
+  customThemes: Record<string, ThemeConfig>; // пользовательские темы по имени
   scale: number; // 0.85..1.15, масштаб UI (zoom)
 }
 
@@ -35,7 +37,7 @@ export interface PlaybackSettings {
 }
 
 export interface PersistedData {
-  version: 2;
+  version: 3;
   musicFolders: string[];
   playlists: Playlist[];
   lyricsOverrides: Record<string, string>;

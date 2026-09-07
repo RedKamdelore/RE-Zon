@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { usePlaylistStore, setPersistedBase, persistPatch } from './playlistStore'
+import { defaultTheme } from '@shared/themeModel'
 import type { PersistedData } from '@shared/types'
 
 function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
   return {
-    version: 2,
+    version: 3,
     musicFolders: ['C:\\Music'],
     playlists: [],
     lyricsOverrides: {},
     volume: 0.8,
     eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    appearance: { skin: 'spotify-dark', accent: '#1DB954', radius: 8, scale: 1 },
+    appearance: { skin: 'spotify-dark', theme: defaultTheme(), customThemes: {}, scale: 1 },
     playback: { crossfadeSec: 0 },
     playStats: {},
     lastfmApiKey: '',
