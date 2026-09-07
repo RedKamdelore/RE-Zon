@@ -217,6 +217,11 @@ describe('migrateV3toV4', () => {
     expect(r.connections).toEqual({})
     expect(r.lastfmApiSecret).toBe('s')
     expect(r.lastfmApiKey).toBe('k')
+    expect(r.favoriteIds).toEqual([])
+  })
+  it('keeps favoriteIds through migration', () => {
+    const r = migrateV3toV4({ version: 3 as const, favoriteIds: ['local:a', 'vk:1_2'] })
+    expect(r.favoriteIds).toEqual(['local:a', 'vk:1_2'])
   })
   it('moves importSources.vkToken to connections.vk', () => {
     const r = migrateV3toV4({ version: 3, importSources: { vkToken: 'abc' } })

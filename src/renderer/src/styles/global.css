@@ -1420,6 +1420,34 @@ body {
   color: var(--text-secondary);
 }
 
+/* --- Любимое (V3-4) --- */
+.pb-heart {
+  color: var(--text-secondary);
+}
+
+.pb-heart.active {
+  color: var(--accent);
+}
+
+.nav-favorites {
+  position: relative;
+}
+
+.nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 11px;
+  text-align: center;
+}
+
+.favorites-cover {
+  color: var(--accent);
+}
+
 .link-btn {
   padding: 0;
   border: none;

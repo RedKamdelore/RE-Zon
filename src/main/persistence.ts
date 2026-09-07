@@ -22,6 +22,7 @@ export const DEFAULT_DATA: PersistedData = {
   connections: {},
   importedTracks: [],
   hiddenTracks: [],
+  favoriteIds: [],
 }
 
 /** Формат appearance до V3-1: плоские skin/accent/radius */
@@ -114,6 +115,7 @@ export function migrateV3toV4(
     version: 4,
     lastfmApiSecret: data.lastfmApiSecret ?? '',
     connections,
+    favoriteIds: (data as Partial<PersistedData>).favoriteIds ?? v3.favoriteIds ?? [],
   }
 }
 

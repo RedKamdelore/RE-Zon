@@ -4,6 +4,7 @@ export type View =
   | { name: 'home' }
   | { name: 'search' }
   | { name: 'playlist'; id: string }
+  | { name: 'favorites' }
   | { name: 'settings' }
   | { name: 'artist'; artist: string }
   | { name: 'album'; album: string; artist?: string }

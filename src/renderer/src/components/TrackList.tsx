@@ -3,9 +3,10 @@ import type { Track } from '@shared/types'
 import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useFavoritesStore } from '../stores/favoritesStore'
 import { useNavStore } from '../stores/navStore'
 import { fmt } from '../utils/format'
-import { PlayIcon, ClockIcon, MusicNoteIcon } from './icons'
+import { PlayIcon, ClockIcon, MusicNoteIcon, HeartIcon } from './icons'
 
 interface TrackListProps {
   tracks: Track[]
@@ -35,6 +36,9 @@ function ContextMenu({
   onClose: () => void
 }) {
   const playlists = usePlaylistStore((s) => s.playlists)
+  const favoriteIds = useFavoritesStore((s) => s.ids)
+  const toggleFavorite = useFavoritesStore((s) => s.toggle)
+  const isFav = favoriteIds.includes(menu.track.id)
   const [pickerOpen, setPickerOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   // Кламп к вьюпорту: начальная позиция — точка клика, после монтирования
@@ -93,6 +97,15 @@ function ContextMenu({
           }}
         >
           Добавить в очередь
+        </button>
+        <button
+          className="ctx-item"
+          onClick={() => {
+            toggleFavorite(t.id)
+            onClose()
+          }}
+        >
+          {isFav ? '♥ Убрать из любимого' : '♡ В любимое'}
         </button>
         {playlists.length > 0 && (
           <button className="ctx-item" onClick={() => setPickerOpen((v) => !v)}>

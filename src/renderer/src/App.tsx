@@ -8,6 +8,7 @@ import PlaylistView from './components/PlaylistView'
 import SettingsView from './components/SettingsView'
 import CollectionView from './components/CollectionView'
 import RadioView from './components/RadioView'
+import FavoritesView from './components/FavoritesView'
 import MiniPlayer from './components/MiniPlayer'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore, visibleTracks } from './stores/libraryStore'
@@ -15,6 +16,7 @@ import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore } from './stores/lyricsStore'
 import { useStatsStore } from './stores/statsStore'
+import { useFavoritesStore } from './stores/favoritesStore'
 import { useConnectionsStore } from './stores/connectionsStore'
 import { useNavStore, type View } from './stores/navStore'
 
@@ -41,6 +43,7 @@ export default function App() {
           useSettingsStore.getState().init(data) // применяет appearance к DOM
           usePlayerStore.getState().setVolume(data.volume)
           usePlayerStore.getState().applyEqPreset(data.eqGains)
+          useFavoritesStore.getState().init(data.favoriteIds ?? [])
           void useLibraryStore.getState().init(data)
           void useConnectionsStore.getState().init() // статусы сервисов (V3-3)
         })
@@ -98,6 +101,7 @@ export default function App() {
         {view.name === 'home' && <HomeView />}
         {view.name === 'search' && <SearchView />}
         {view.name === 'settings' && <SettingsView />}
+        {view.name === 'favorites' && <FavoritesView />}
         {view.name === 'playlist' &&
           (playlist ? (
             <PlaylistView playlist={playlist} tracks={tracks} />

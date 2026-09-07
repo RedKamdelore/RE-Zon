@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
+import { useFavoritesStore } from '../stores/favoritesStore'
 import { persistPatch } from '../stores/playlistStore'
 import { fmt } from '../utils/format'
 import {
@@ -15,6 +16,7 @@ import {
   MiniIcon,
   VolumeIcon,
   MusicNoteIcon,
+  HeartIcon,
 } from './icons'
 
 export type Panel = 'queue' | 'lyrics' | 'eq' | 'mini'
@@ -46,6 +48,9 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
 
   const track = order.length > 0 ? queue[order[pos]] : undefined
   const disabled = queue.length === 0
+  const favoriteIds = useFavoritesStore((s) => s.ids)
+  const toggleFavorite = useFavoritesStore((s) => s.toggle)
+  const isFav = track ? favoriteIds.includes(track.id) : false
 
   // Дебаунсированный persist громкости — паттерн как у Equalizer (eqGains)
   const changeVolume = (v: number): void => {
@@ -68,6 +73,15 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
             <div className="pb-title">{track.title}</div>
             <div className="pb-artist">{track.artist}</div>
           </div>
+        )}
+        {track && (
+          <button
+            className={`icon-btn pb-heart${isFav ? ' active' : ''}`}
+            title={isFav ? 'Убрать из любимого' : 'В любимое'}
+            onClick={() => toggleFavorite(track.id)}
+          >
+            <HeartIcon size={18} filled={isFav} />
+          </button>
         )}
       </div>
 

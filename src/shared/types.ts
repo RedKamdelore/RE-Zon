@@ -60,4 +60,6 @@ export interface PersistedData {
   // id треков, скрытых пользователем из библиотеки: остаются в tracks,
   // но фильтруются из всех списков (visibleTracks в libraryStore)
   hiddenTracks: string[];
+  // id треков, добавленных в «Любимое» (сердечко; виртуальный плейлист)
+  favoriteIds: string[];
 }

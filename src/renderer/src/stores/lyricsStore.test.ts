@@ -22,6 +22,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     importSources: {},
     importedTracks: [],
     hiddenTracks: [],
+    favoriteIds: [],
     ...overrides,
   }
 }

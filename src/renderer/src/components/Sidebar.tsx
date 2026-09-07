@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { View } from '../stores/navStore'
 import { usePlaylistStore } from '../stores/playlistStore'
-import { HomeIcon, SearchIcon, GearIcon, PlusIcon, MusicNoteIcon } from './icons'
+import { useFavoritesStore } from '../stores/favoritesStore'
+import { HomeIcon, SearchIcon, GearIcon, PlusIcon, MusicNoteIcon, HeartIcon } from './icons'
 
 interface SidebarProps {
   view: View
@@ -16,6 +17,7 @@ interface MenuState {
 
 export default function Sidebar({ view, onNavigate }: SidebarProps) {
   const playlists = usePlaylistStore((s) => s.playlists)
+  const favoriteCount = useFavoritesStore((s) => s.ids.length)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
 
@@ -67,6 +69,13 @@ export default function Sidebar({ view, onNavigate }: SidebarProps) {
         >
           <SearchIcon />
           Поиск
+        </button>
+        <button
+          className={`nav-row nav-favorites${view.name === 'favorites' ? ' active' : ''}`}
+          onClick={() => onNavigate({ name: 'favorites' })}
+        >
+          <HeartIcon size={20} />
+          Любимое{favoriteCount > 0 && <span className="nav-badge">{favoriteCount}</span>}
         </button>
         <button
           className={`nav-row${view.name === 'settings' ? ' active' : ''}`}
