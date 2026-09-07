@@ -4,6 +4,7 @@ import { nextIndex, prevIndex, buildShuffleOrder } from '@shared/queue'
 import { AudioEngine, resolveTrackUrl, clampVolume } from '../audio/engine'
 import { useSettingsStore } from './settingsStore'
 import { recordPlay } from './statsStore'
+import { isScrobblable, flushSoon, enqueueScrobble } from '../scrobbler'
 
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
@@ -155,6 +156,7 @@ export function createPlayerStore(
       if (playing) {
         engine.pause()
         set({ playing: false })
+        flushSoon() // пауза — отправляем накопленные скробблы (V3-4c)
       } else {
         engine.resume()
         set({ playing: true })
@@ -380,6 +382,15 @@ export function getPlayerEngine(): PlayerEngine {
 // Текущая активная подписка — защита от двойной регистрации слушателей
 let currentSubscription: (() => void) | null = null
 
+/** Обёртка для подписок: скроббл без throw (очередь не должна ронять плеер) */
+const enqueueScrobbleQuiet = (track: Track): void => {
+  try {
+    enqueueScrobble(track)
+  } catch {
+    // очередь скробблинга не должна ломать воспроизведение
+  }
+}
+
 /**
  * Подписка на события <audio>: вызывается один раз из App (поздний task).
  * Идемпотентна: повторный вызов снимает предыдущую подписку.
@@ -405,6 +416,14 @@ export function initPlayerSubscriptions(
         if (!fromActiveDeck(e)) return
         store.setState({ currentSec: engine.element.currentTime })
         store.getState().maybeStartCrossfade()
+        // Скробблинг (V3-4c): трек дослушан до порога Last.fm — в очередь
+        const s = store.getState()
+        if (s.order.length > 0) {
+          const current = s.queue[s.order[s.pos]]
+          if (current && isScrobblable(current, engine.element.currentTime)) {
+            enqueueScrobbleQuiet(current)
+          }
+        }
       },
       { signal },
     )
@@ -412,6 +431,15 @@ export function initPlayerSubscriptions(
       'ended',
       (e) => {
         if (!fromActiveDeck(e)) return
+        // ended = трек точно дослушан — тоже кандидат в скроббл (если timeupdate
+        // не успел; напр. короткий трек)
+        const s = store.getState()
+        if (s.order.length > 0) {
+          const current = s.queue[s.order[s.pos]]
+          if (current && isScrobblable(current, engine.element.duration || current.durationSec)) {
+            enqueueScrobbleQuiet(current)
+          }
+        }
         store.getState().next() // auto-advance
       },
       { signal },
