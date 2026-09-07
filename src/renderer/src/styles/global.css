@@ -1412,6 +1412,14 @@ body {
   margin-top: 10px;
 }
 
+.import-help {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
 .link-btn {
   padding: 0;
   border: none;

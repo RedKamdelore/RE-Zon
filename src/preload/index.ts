@@ -46,6 +46,12 @@ const api = {
     ipcRenderer.invoke('connect:vk'),
   connectLastfm: (): Promise<{ ok: boolean; error?: string; username?: string }> =>
     ipcRenderer.invoke('connect:lastfm'),
+  connectSpotify: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('connect:spotify'),
+  spotifyImport: (): Promise<
+    | { ok: true; playlists: Array<{ id: string; name: string; tracks: Array<{ title: string; artist: string }> }> }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke('spotify:import'),
   onPlayerCommand: (cb: (cmd: string) => void) => {
     const listener = (_e: IpcRendererEvent, cmd: string): void => cb(cmd)
     ipcRenderer.on('player:cmd', listener)

@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { useConnectionsStore, describeWhen } from './connectionsStore'
-import type { ConnectionStatusView } from '../../preload/index'
+
+interface ConnectionStatusView {
+  connected: boolean
+  connectedAt?: number
+  userId?: string
+  playlistName?: string
+}
 
 function fakeApi(statuses: Record<string, ConnectionStatusView>) {
   return {

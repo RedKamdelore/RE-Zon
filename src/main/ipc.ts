@@ -7,6 +7,15 @@ import { vkAudioGet, vkAuthUrl, matchVkAuthUrl } from './vk'
 import { scSearch, scResolveStream } from './soundcloud'
 import { lastfmApi, lfmAuthUrl, matchLfmAuthUrl, lfmGetSession, lfmScrobble, type ScrobblePayload } from './lastfm'
 import { openAuthWindow } from './authWindow'
+import {
+  spPkceVerifier,
+  spPkceChallenge,
+  spAuthUrl,
+  spExchange,
+  spRefresh,
+  spPlaylists,
+  spPlaylistTracks,
+} from './spotify'
 import { connectionStatus, type ServiceId } from '../shared/connections'
 import type { PersistedData, LfmCallResult } from '../shared/types'
 import type { VkImportResult, ScSearchResult } from '../shared/matching'
@@ -194,4 +203,115 @@ export function registerIpc(win: BrowserWindow): void {
       }
     },
   )
+
+  // --- Spotify PKCE (V3-3) ----------------------------------------------------
+
+  /**
+   * OAuth PKCE: открываем окно авторизации и параллельно поднимаем
+   * одноразовый HTTP-сервер на 127.0.0.1:8888 — Spotify redirect'ит на него
+   * с ?code=. Возвращаемся с access/refresh токенами.
+   */
+  ipcMain.handle('connect:spotify', async (): Promise<{ ok: boolean; error?: string }> => {
+    const data = loadData()
+    const clientId = (data.importSources as { spotifyClientId?: string }).spotifyClientId ?? ''
+    if (!clientId) return { ok: false, error: 'Сначала укажите Client ID в полях ниже' }
+
+    const verifier = spPkceVerifier()
+    const state = spPkceVerifier().slice(0, 24)
+    const { createServer } = await import('http')
+
+    // Одноразовый callback-сервер: резолвимся при ?code=, закрываемся сразу
+    const codePromise = new Promise<string>((resolve, reject) => {
+      const srv = createServer((req, res) => {
+        const url = `http://127.0.0.1:8888${req.url ?? '/'}`
+        const m = url.includes('code=') ? new URLSearchParams(url.split('?')[1]).get('code') : null
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        res.end('<h3>Re:Zon — Spotify подключён. Можно закрыть это окно.</h3>')
+        if (m) {
+          resolve(m)
+          srv.close()
+        }
+      })
+      srv.on('error', (e) => reject(e))
+      srv.listen(8888, '127.0.0.1')
+      // Тайтмаут 3 минуты: закрыли окно / передумали
+      setTimeout(() => {
+        reject(new Error('Время ожидания истекло'))
+        srv.closeAllConnections?.()
+        srv.close()
+      }, 180_000).unref?.()
+    })
+
+    // Окно авторизации: любой уход с accounts.spotify.com нас не интересует —
+    // код придёт на callback-сервер. Окно закрываем по resolve.
+    const windowPromise = openAuthWindow(win, {
+      url: spAuthUrl(clientId, spPkceChallenge(verifier), state),
+      title: 'Вход Spotify',
+      width: 480,
+      // Матчим финальный redirect — окно закрывается как только код получен
+      match: (url) => (/127\.0\.0\.1:8888/.test(url) ? 'done' : null),
+    })
+
+    let code: string
+    try {
+      code = await codePromise
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    } finally {
+      await windowPromise
+    }
+
+    try {
+      const tokens = await spExchange(clientId, code, verifier)
+      saveData({
+        ...data,
+        connections: {
+          ...data.connections,
+          spotify: {
+            token: tokens.accessToken,
+            connectedAt: Date.now(),
+            refreshToken: tokens.refreshToken,
+          },
+        },
+      })
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  /**
+   * Импорт плейлистов Spotify: refresh токена (access живёт 1 час),
+   * выкачка плейлистов с треками. Метаданные для матчинга по библиотеке —
+   * стриминга из Spotify нет (нет Web API playback для бесплатных ключей).
+   */
+  ipcMain.handle('spotify:import', async (): Promise<
+    { ok: true; playlists: Array<{ id: string; name: string; tracks: Array<{ title: string; artist: string }> }> } | { ok: false; error: string }
+  > => {
+    const data = loadData()
+    const conn = data.connections.spotify
+    const clientId = (data.importSources as { spotifyClientId?: string }).spotifyClientId ?? ''
+    if (!conn?.refreshToken || !clientId) {
+      return { ok: false, error: 'Spotify не подключён' }
+    }
+    try {
+      // refresh: access-токен мог протухнуть (1 час), refresh бессрочный
+      const tokens = await spRefresh(clientId, conn.refreshToken)
+      saveData({
+        ...data,
+        connections: {
+          ...data.connections,
+          spotify: { ...conn, token: tokens.accessToken, refreshToken: tokens.refreshToken },
+        },
+      })
+      const lists = await spPlaylists(tokens.accessToken)
+      const out = []
+      for (const pl of lists) {
+        out.push({ id: pl.id, name: pl.name, tracks: await spPlaylistTracks(tokens.accessToken, pl.id) })
+      }
+      return { ok: true, playlists: out }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
 }

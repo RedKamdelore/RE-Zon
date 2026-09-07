@@ -18,6 +18,7 @@ export default function ImportSection() {
     <section className="settings-section">
       <h2>Импорт</h2>
       <VkCard />
+      <SpotifyCard />
       <LastfmCard />
       <ScCard />
     </section>
@@ -372,6 +373,169 @@ function LastfmCard() {
           </button>
         )}
       </div>
+      {error && <div className="import-status import-error">{error}</div>}
+      {statusMsg && <div className="import-status">{statusMsg}</div>}
+    </ProviderCard>
+  )
+}
+
+// --- Spotify (PKCE, метаданные плейлистов + матчинг по библиотеке) -------------
+
+function SpotifyCard() {
+  const status = useConnectionsStore((s) => s.statuses.spotify)
+  const [busy, setBusy] = useState<string | null>(null) // 'connect' | 'import'
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
+  const [clientId, setClientId] = useState<string>(() => {
+    const sources = getPersistedBase()?.importSources as { spotifyClientId?: string } | undefined
+    return sources?.spotifyClientId ?? ''
+  })
+
+  const saveClientId = (value: string): void => {
+    setClientId(value)
+    const base = getPersistedBase()
+    persistPatch({
+      importSources: { ...(base?.importSources ?? {}), spotifyClientId: value },
+    })
+  }
+
+  const connect = async (): Promise<void> => {
+    if (!window.api || busy !== null) return
+    setBusy('connect')
+    setError(null)
+    setStatusMsg(null)
+    try {
+      const res = await window.api.connectSpotify()
+      if (!res.ok) {
+        setError(res.error ?? 'Не удалось подключить Spotify')
+        return
+      }
+      await useConnectionsStore.getState().refresh()
+      setStatusMsg('Spotify подключён — импортируйте плейлисты')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const disconnect = async (): Promise<void> => {
+    if (!window.api || busy !== null) return
+    await useConnectionsStore.getState().disconnect('spotify')
+    setStatusMsg('Spotify отключён')
+  }
+
+  const doImport = async (): Promise<void> => {
+    if (!window.api || busy !== null || !status?.connected) return
+    setBusy('import')
+    setError(null)
+    setStatusMsg(null)
+    try {
+      const res = await window.api.spotifyImport()
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      // Плейлисты Spotify → плейлисты Re:Zon из матчинга по библиотеке.
+      // Спотифай-треки не стримятся — берём локальные совпадения по названию.
+      const library = useLibraryStore.getState().tracks
+      let matchedTotal = 0
+      let created = 0
+      let updated = 0
+      for (const sp of res.playlists) {
+        const matches: Track[] = []
+        for (const t of sp.tracks) {
+          const found = library.find(
+            (x) =>
+              x.title.toLowerCase() === t.title.toLowerCase() &&
+              x.artist.toLowerCase() === t.artist.split(',')[0].trim().toLowerCase(),
+          )
+          if (found) matches.push(found)
+        }
+        matchedTotal += matches.length
+        if (matches.length === 0) continue
+        const name = `Spotify: ${sp.name}`
+        const existing = usePlaylistStore.getState().playlists.find((p) => p.name === name)
+        if (existing) {
+          usePlaylistStore.setState({
+            playlists: usePlaylistStore.getState().playlists.map((p) =>
+              p.id === existing.id ? { ...p, trackIds: matches.map((m) => m.id) } : p,
+            ),
+          })
+          persistPatch({ playlists: usePlaylistStore.getState().playlists })
+          updated++
+        } else {
+          const pl = usePlaylistStore.getState()
+          const playlistId = pl.create(name)
+          for (const m of matches) pl.addTrack(playlistId, m.id)
+          created++
+        }
+      }
+      setStatusMsg(
+        `Плейлистов: ${res.playlists.length}, создано ${created}, обновлено ${updated}. ` +
+          `Совпадений с библиотекой: ${matchedTotal} (остальное — только метаданные Spotify)`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <ProviderCard name="Spotify">
+      <StatusLine status={status} />
+      {!status?.connected && (
+        <>
+          <div className="settings-label">
+            Client ID <span className="muted">(бесплатно, developer.spotify.com/dashboard)</span>
+          </div>
+          <input
+            type="password"
+            className="settings-input"
+            placeholder="Client ID из Spotify Dashboard"
+            value={clientId}
+            onChange={(e) => saveClientId(e.target.value)}
+          />
+          <button className="link-btn" onClick={() => setShowHelp((v) => !v)}>
+            {showHelp ? 'Скрыть инструкцию' : 'Как получить Client ID?'}
+          </button>
+          {showHelp && (
+            <ol className="import-help">
+              <li>Откройте developer.spotify.com/dashboard → Create app</li>
+              <li>Redirect URI: http://127.0.0.1:8888/callback (обязательно точь-в-точь)</li>
+              <li>Скопируйте Client ID в поле выше</li>
+              <li>Нажмите «Подключить Spotify» и войдите</li>
+            </ol>
+          )}
+        </>
+      )}
+      <div className="import-actions">
+        {status?.connected ? (
+          <>
+            <button className="btn-outline" disabled={busy !== null} onClick={() => void doImport()}>
+              {busy === 'import' ? 'Импорт…' : 'Импортировать плейлисты'}
+            </button>
+            <button className="btn-outline" disabled={busy !== null} onClick={() => void disconnect()}>
+              Отключить
+            </button>
+          </>
+        ) : (
+          <button
+            className="btn-outline"
+            disabled={busy !== null || clientId.trim() === ''}
+            onClick={() => void connect()}
+          >
+            {busy === 'connect' ? 'Ожидание входа…' : 'Подключить Spotify'}
+          </button>
+        )}
+      </div>
+      <p className="muted import-note">
+        Импортируются метаданные плейлистов: треки матчатся с вашей библиотекой по
+        названию. Стриминг музыки из Spotify не поддерживается (нужен Premium +
+        закрытый API) — плейлист собирается из локальных совпадений.
+      </p>
       {error && <div className="import-status import-error">{error}</div>}
       {statusMsg && <div className="import-status">{statusMsg}</div>}
     </ProviderCard>
