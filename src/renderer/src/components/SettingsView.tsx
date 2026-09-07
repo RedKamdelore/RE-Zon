@@ -60,8 +60,6 @@ function SliderRow(props: {
 export default function SettingsView() {
   const appearance = useSettingsStore((s) => s.appearance)
   const playback = useSettingsStore((s) => s.playback)
-  const lastfmApiKey = useSettingsStore((s) => s.lastfmApiKey)
-  const lastfmProxy = useSettingsStore((s) => s.lastfmProxy)
   const loading = useLibraryStore((s) => s.loading)
   const allTracks = useLibraryStore((s) => s.tracks)
   const hiddenIds = useLibraryStore((s) => s.hiddenIds)
@@ -431,29 +429,6 @@ export default function SettingsView() {
           style={{ ['--progress' as string]: `${(playback.crossfadeSec / 12) * 100}%` }}
           onChange={(e) => s().setCrossfadeSec(Number(e.target.value))}
         />
-      </section>
-
-      <section className="settings-section">
-        <h2>Интеграции</h2>
-        <div className="settings-label">Last.fm API key</div>
-        <input
-          type="password"
-          className="settings-input"
-          placeholder="Введите API ключ"
-          value={lastfmApiKey}
-          onChange={(e) => s().setLastfmKey(e.target.value)}
-        />
-        <div className="settings-label">Прокси для Last.fm (опционально, http://host:port)</div>
-        <input
-          type="text"
-          className="settings-input"
-          placeholder="http://127.0.0.1:8080"
-          value={lastfmProxy}
-          onChange={(e) => s().setLastfmProxy(e.target.value)}
-        />
-        <p className="muted">
-          Если видите ошибку 403 — Last.fm блокирует запросы по региону; укажите любой HTTP-прокси
-        </p>
       </section>
 
       <ImportSection />

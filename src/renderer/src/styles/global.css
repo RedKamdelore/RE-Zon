@@ -1398,6 +1398,34 @@ body {
   color: var(--danger, #ef4444);
 }
 
+.import-ok {
+  color: var(--accent);
+}
+
+.import-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.import-fallback {
+  margin-top: 10px;
+}
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--text-primary);
+}
+
 /* --- Редактор тем (V3-1) --- */
 .skin-card {
   position: relative;

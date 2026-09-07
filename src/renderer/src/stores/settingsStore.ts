@@ -8,6 +8,7 @@ interface SettingsState {
   appearance: AppearanceSettings
   playback: PlaybackSettings
   lastfmApiKey: string
+  lastfmApiSecret: string
   lastfmProxy: string
   init: (data: PersistedData) => void // вызывается из App после единственного loadData
   /** Выбор пресета (встроенного или пользовательского): загружает его в редактор */
@@ -22,6 +23,7 @@ interface SettingsState {
   deleteCustomTheme: (name: string) => void
   setCrossfadeSec: (sec: number) => void
   setLastfmKey: (key: string) => void
+  setLastfmSecret: (secret: string) => void
   setLastfmProxy: (proxy: string) => void
 }
 
@@ -38,6 +40,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     appearance: { ...DEFAULT_APPEARANCE },
     playback: { crossfadeSec: 0 },
     lastfmApiKey: '',
+    lastfmApiSecret: '',
     lastfmProxy: '',
 
     init: (data) => {
@@ -45,6 +48,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
         appearance: data.appearance,
         playback: data.playback,
         lastfmApiKey: data.lastfmApiKey,
+        lastfmApiSecret: data.lastfmApiSecret,
         lastfmProxy: data.lastfmProxy,
       })
       applyTheme(data.appearance.theme)
@@ -99,6 +103,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     setLastfmKey: (key) => {
       set({ lastfmApiKey: key })
       persistPatch({ lastfmApiKey: key })
+    },
+
+    setLastfmSecret: (secret) => {
+      set({ lastfmApiSecret: secret })
+      persistPatch({ lastfmApiSecret: secret })
     },
 
     setLastfmProxy: (proxy) => {

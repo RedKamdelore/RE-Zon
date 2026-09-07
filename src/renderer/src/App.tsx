@@ -15,6 +15,7 @@ import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore } from './stores/lyricsStore'
 import { useStatsStore } from './stores/statsStore'
+import { useConnectionsStore } from './stores/connectionsStore'
 import { useNavStore, type View } from './stores/navStore'
 
 export type { View }
@@ -41,6 +42,7 @@ export default function App() {
           usePlayerStore.getState().setVolume(data.volume)
           usePlayerStore.getState().applyEqPreset(data.eqGains)
           void useLibraryStore.getState().init(data)
+          void useConnectionsStore.getState().init() // статусы сервисов (V3-3)
         })
         .catch((e) => console.error('loadData failed:', e))
     } else {
