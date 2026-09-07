@@ -14,6 +14,7 @@ export const DEFAULT_DATA: PersistedData = {
   playback: { crossfadeSec: 0 },
   playStats: {},
   lastfmApiKey: '',
+  lastfmProxy: '',
   importSources: {},
   importedTracks: [],
 }

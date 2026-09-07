@@ -1,6 +1,8 @@
 /**
- * Last.fm track.getSimilar. fetchSimilarWith принимает fetcher (DI для тестов),
- * fetchSimilar — обёртка над глобальным fetch.
+ * Last.fm track.getSimilar. Запросы идут через main-процесс (window.api.lastfmCall):
+ * Last.fm блокирует API по региону, а из main запрос можно пустить через прокси.
+ * fetchSimilarWith принимает caller (DI для тестов — симулирует IPC-слой),
+ * fetchSimilar — обёртка над window.api.lastfmCall.
  */
 
 export interface SimilarTrack {
@@ -9,15 +11,11 @@ export interface SimilarTrack {
   match: number // 0..1
 }
 
-export interface FetcherResponse {
-  ok: boolean
-  status: number
-  json: () => Promise<unknown>
-}
-
-export type Fetcher = (url: string) => Promise<FetcherResponse>
-
-const API_BASE = 'https://ws.audioscrobbler.com/2.0/'
+/** IPC-слой: method + params → сырой JSON Last.fm (ошибки прилетают исключением) */
+export type LfmCaller = (
+  method: string,
+  params: Record<string, string | number>,
+) => Promise<unknown>
 
 interface LfmArtist {
   name?: string
@@ -36,20 +34,15 @@ interface LfmResponse {
 }
 
 export async function fetchSimilarWith(
-  fetcher: Fetcher,
+  caller: LfmCaller,
   artist: string,
   title: string,
-  apiKey: string,
 ): Promise<SimilarTrack[]> {
-  if (!apiKey) return []
-  const url =
-    `${API_BASE}?method=track.getSimilar` +
-    `&artist=${encodeURIComponent(artist)}` +
-    `&track=${encodeURIComponent(title)}` +
-    `&api_key=${encodeURIComponent(apiKey)}&format=json&limit=20`
-  const res = await fetcher(url)
-  if (!res.ok) throw new Error(`Last.fm: HTTP ${res.status}`)
-  const data = (await res.json()) as LfmResponse
+  const data = (await caller('track.getSimilar', {
+    artist,
+    track: title,
+    limit: 20,
+  })) as LfmResponse
   // Last.fm отвечает 200 даже на ошибки API — смотрим поле error
   if (typeof data.error === 'number') {
     throw new Error(data.message ? `Last.fm: ${data.message}` : `Last.fm: ошибка ${data.error}`)
@@ -63,10 +56,13 @@ export async function fetchSimilarWith(
   }))
 }
 
-export function fetchSimilar(
-  artist: string,
-  title: string,
-  apiKey: string,
-): Promise<SimilarTrack[]> {
-  return fetchSimilarWith((url) => fetch(url), artist, title, apiKey)
+export function fetchSimilar(artist: string, title: string): Promise<SimilarTrack[]> {
+  const api = typeof window !== 'undefined' ? window.api : undefined
+  if (!api?.lastfmCall) return Promise.resolve([])
+  const caller: LfmCaller = async (method, params) => {
+    const r = await api.lastfmCall(method, params)
+    if (!r.ok) throw new Error(r.error)
+    return r.data
+  }
+  return fetchSimilarWith(caller, artist, title)
 }

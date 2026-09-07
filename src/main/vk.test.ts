@@ -90,6 +90,68 @@ describe('vkAudioGetWith', () => {
     const fetcher: Fetcher = vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }))
     await expect(vkAudioGetWith(fetcher, 'T')).rejects.toThrow(/503/)
   })
+
+  it('requests the first page with count=6000 and offset=0', async () => {
+    const fetcher = okFetcher({ response: { count: 0, items: [] } })
+    await vkAudioGetWith(fetcher, 'T')
+    const url = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(url).toContain('count=6000')
+    expect(url).toContain('offset=0')
+  })
+
+  it('makes a single request when all items fit on the first page', async () => {
+    const fetcher = okFetcher(VK_RESPONSE)
+    const tracks = await vkAudioGetWith(fetcher, 'T')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(tracks).toHaveLength(2)
+  })
+
+  it('paginates with increasing offset until all items are fetched', async () => {
+    const page = (from: number, n: number): unknown => ({
+      response: {
+        count: 5,
+        items: Array.from({ length: n }, (_, i) => ({
+          id: from + i,
+          owner_id: 1,
+          artist: `A${from + i}`,
+          title: `T${from + i}`,
+        })),
+      },
+    })
+    const fetcher: Fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => page(0, 2) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => page(2, 2) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => page(4, 1) })
+    const sleep = vi.fn(async () => {})
+    const tracks = await vkAudioGetWith(fetcher, 'T', sleep)
+    expect(tracks.map((t) => t.title)).toEqual(['T0', 'T1', 'T2', 'T3', 'T4'])
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    const urls = (fetcher as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string)
+    expect(urls[0]).toContain('offset=0')
+    expect(urls[1]).toContain('offset=2')
+    expect(urls[2]).toContain('offset=4')
+    // задержка между страницами (rate limit VK ~3 req/s), но не перед первой
+    expect(sleep).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates a readable error when a later page fails', async () => {
+    const fetcher: Fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ response: { count: 5, items: [{ id: 1, owner_id: 1 }] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ error: { error_code: 6, error_msg: 'Too many requests per second' } }),
+      })
+    await expect(vkAudioGetWith(fetcher, 'T', async () => {})).rejects.toThrow(
+      /слишком много запросов/,
+    )
+  })
 })
 
 describe('vkAudioGet', () => {

@@ -17,6 +17,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     playback: { crossfadeSec: 0 },
     playStats: {},
     lastfmApiKey: '',
+    lastfmProxy: '',
     importSources: {},
     importedTracks: [],
     ...overrides,
@@ -36,6 +37,7 @@ describe('settingsStore', () => {
       appearance: { ...DEFAULT_APPEARANCE },
       playback: { crossfadeSec: 0 },
       lastfmApiKey: '',
+      lastfmProxy: '',
     })
     setPersistedBase(makeBase())
   })
@@ -101,6 +103,18 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().lastfmApiKey).toBe('my-key')
     vi.advanceTimersByTime(600)
     expect((saveData.mock.calls[0][0] as PersistedData).lastfmApiKey).toBe('my-key')
+  })
+
+  it('init loads lastfmProxy from persisted data', () => {
+    useSettingsStore.getState().init(makeBase({ lastfmProxy: 'http://127.0.0.1:8080' }))
+    expect(useSettingsStore.getState().lastfmProxy).toBe('http://127.0.0.1:8080')
+  })
+
+  it('setLastfmProxy persists proxy', () => {
+    useSettingsStore.getState().setLastfmProxy('http://127.0.0.1:8080')
+    expect(useSettingsStore.getState().lastfmProxy).toBe('http://127.0.0.1:8080')
+    vi.advanceTimersByTime(600)
+    expect((saveData.mock.calls[0][0] as PersistedData).lastfmProxy).toBe('http://127.0.0.1:8080')
   })
 
 })

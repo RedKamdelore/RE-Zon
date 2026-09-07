@@ -5,7 +5,8 @@ import { loadData, saveData } from './persistence'
 import { scanFolders, demoTracks } from './library'
 import { vkAudioGet } from './vk'
 import { scSearch, scResolveStream } from './soundcloud'
-import type { PersistedData } from '../shared/types'
+import { lastfmApi } from './lastfm'
+import type { PersistedData, LfmCallResult } from '../shared/types'
 import type { VkImportResult, ScSearchResult } from '../shared/matching'
 
 const COVER_MIME: Record<string, string> = {
@@ -43,6 +44,18 @@ export function registerIpc(win: BrowserWindow): void {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   })
+  // Last.fm зовём из main: API блокируется по региону, через main можно идти по прокси
+  ipcMain.handle(
+    'lastfm:call',
+    async (_e, method: string, params: Record<string, string | number>): Promise<LfmCallResult> => {
+      try {
+        const data = loadData()
+        return { ok: true, data: await lastfmApi(method, params, data.lastfmApiKey, data.lastfmProxy) }
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    },
+  )
   // Transcoding API URL → финальный mp3-поток (резолвится при воспроизведении)
   ipcMain.handle('sc:resolveStream', (_e, url: string): Promise<string> => scResolveStream(url))
   ipcMain.handle('playlist:pickCover', async () => {

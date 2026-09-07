@@ -15,6 +15,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     playback: { crossfadeSec: 0 },
     playStats: {},
     lastfmApiKey: '',
+    lastfmProxy: '',
     importSources: {},
     importedTracks: [],
     ...overrides,

@@ -19,6 +19,7 @@ export default function SettingsView() {
   const appearance = useSettingsStore((s) => s.appearance)
   const playback = useSettingsStore((s) => s.playback)
   const lastfmApiKey = useSettingsStore((s) => s.lastfmApiKey)
+  const lastfmProxy = useSettingsStore((s) => s.lastfmProxy)
   const loading = useLibraryStore((s) => s.loading)
   // musicFolders живут только в persisted base — локальный снапшот, обновляем после add/remove
   const [folders, setFolders] = useState<string[]>(() => getPersistedBase()?.musicFolders ?? [])
@@ -129,6 +130,17 @@ export default function SettingsView() {
           value={lastfmApiKey}
           onChange={(e) => s().setLastfmKey(e.target.value)}
         />
+        <div className="settings-label">Прокси для Last.fm (опционально, http://host:port)</div>
+        <input
+          type="text"
+          className="settings-input"
+          placeholder="http://127.0.0.1:8080"
+          value={lastfmProxy}
+          onChange={(e) => s().setLastfmProxy(e.target.value)}
+        />
+        <p className="muted">
+          Если видите ошибку 403 — Last.fm блокирует запросы по региону; укажите любой HTTP-прокси
+        </p>
       </section>
 
       <ImportSection />

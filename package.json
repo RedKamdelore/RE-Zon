@@ -20,6 +20,7 @@
     "music-metadata": "^11.15.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "undici": "^8.10.2",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

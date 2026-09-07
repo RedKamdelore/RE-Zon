@@ -31,7 +31,7 @@ function LastfmSection({ seed }: { seed: Track }) {
     let cancelled = false
     setSimilar(null)
     setError(null)
-    fetchSimilar(seed.artist, seed.title, apiKey)
+    fetchSimilar(seed.artist, seed.title)
       .then((list) => {
         if (!cancelled) setSimilar(list)
       })

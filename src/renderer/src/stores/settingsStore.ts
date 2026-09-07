@@ -7,6 +7,7 @@ interface SettingsState {
   appearance: AppearanceSettings
   playback: PlaybackSettings
   lastfmApiKey: string
+  lastfmProxy: string
   init: (data: PersistedData) => void // вызывается из App после единственного loadData
   setSkin: (skin: string) => void
   setAccent: (hex: string) => void
@@ -14,6 +15,7 @@ interface SettingsState {
   setScale: (v: number) => void
   setCrossfadeSec: (sec: number) => void
   setLastfmKey: (key: string) => void
+  setLastfmProxy: (proxy: string) => void
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => {
@@ -29,12 +31,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     appearance: { ...DEFAULT_APPEARANCE },
     playback: { crossfadeSec: 0 },
     lastfmApiKey: '',
+    lastfmProxy: '',
 
     init: (data) => {
       set({
         appearance: data.appearance,
         playback: data.playback,
         lastfmApiKey: data.lastfmApiKey,
+        lastfmProxy: data.lastfmProxy,
       })
       applyAppearance(data.appearance)
     },
@@ -53,6 +57,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
     setLastfmKey: (key) => {
       set({ lastfmApiKey: key })
       persistPatch({ lastfmApiKey: key })
+    },
+
+    setLastfmProxy: (proxy) => {
+      set({ lastfmProxy: proxy })
+      persistPatch({ lastfmProxy: proxy })
     },
   }
 })

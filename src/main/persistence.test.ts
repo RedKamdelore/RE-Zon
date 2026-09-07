@@ -21,8 +21,18 @@ describe('mergeWithDefaults', () => {
     expect(d.playback).toEqual({ crossfadeSec: 0 })
     expect(d.playStats).toEqual({})
     expect(d.lastfmApiKey).toBe('')
+    expect(d.lastfmProxy).toBe('')
     expect(d.importSources).toEqual({})
     expect(d.importedTracks).toEqual([])
+  })
+  it('v2 file without lastfmProxy (pre-V3-0) gets the default', () => {
+    const { lastfmProxy: _omit, ...oldV2 } = DEFAULT_DATA
+    const r = mergeWithDefaults(oldV2)
+    expect(r.lastfmProxy).toBe('')
+  })
+  it('persisted lastfmProxy survives the merge', () => {
+    const r = mergeWithDefaults({ lastfmProxy: 'http://127.0.0.1:8080' })
+    expect(r.lastfmProxy).toBe('http://127.0.0.1:8080')
   })
   it('partial v2 data merges with defaults', () => {
     const r = mergeWithDefaults({ volume: 0.5, musicFolders: ['D:\\Music'] })
