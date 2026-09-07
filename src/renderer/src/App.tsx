@@ -10,6 +10,7 @@ import CollectionView from './components/CollectionView'
 import RadioView from './components/RadioView'
 import FavoritesView from './components/FavoritesView'
 import MiniPlayer from './components/MiniPlayer'
+import { useHotkeys } from './hotkeys'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore, visibleTracks } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
@@ -27,6 +28,8 @@ export default function App() {
   const setView = useNavStore((s) => s.setView)
   const playlists = usePlaylistStore((s) => s.playlists)
   const tracks = useLibraryStore(visibleTracks)
+
+  useHotkeys() // глобальные горячие клавиши (V3-4)
 
   useEffect(() => {
     const unsubscribe = initPlayerSubscriptions()
