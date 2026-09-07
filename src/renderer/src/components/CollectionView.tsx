@@ -1,4 +1,4 @@
-import { useLibraryStore } from '../stores/libraryStore'
+import { useLibraryStore, visibleTracks } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { plural } from '../utils/plural'
 import TrackList from './TrackList'
@@ -11,7 +11,7 @@ interface CollectionViewProps {
 
 /** Экран исполнителя/альбома: шапка как у PlaylistView + TrackList по фильтру */
 export default function CollectionView({ kind, name }: CollectionViewProps) {
-  const allTracks = useLibraryStore((s) => s.tracks)
+  const allTracks = useLibraryStore(visibleTracks)
 
   const tracks =
     kind === 'artist'

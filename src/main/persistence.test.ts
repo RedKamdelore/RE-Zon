@@ -97,6 +97,7 @@ describe('mergeWithDefaults', () => {
       accent: '#8B5CF6',
       radius: 12,
     })
+    expect(r.hiddenTracks).toEqual([])
   })
   it('v2 data with unknown skin falls back to default theme', () => {
     const r = mergeWithDefaults({
@@ -136,6 +137,10 @@ describe('mergeWithDefaults', () => {
     expect(r.lastfmApiKey).toBe('')
     expect(r.importSources).toEqual({})
     expect(r.importedTracks).toEqual([])
+  })
+  it('defaults hiddenTracks to empty for v3 data without the field', () => {
+    // файл v3, записанный до V3-2, не содержит hiddenTracks — подставляется дефолт
+    expect(mergeWithDefaults({ version: 3, volume: 0.5 }).hiddenTracks).toEqual([])
   })
 })
 

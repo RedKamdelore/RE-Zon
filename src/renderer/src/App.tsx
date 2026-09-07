@@ -10,7 +10,7 @@ import CollectionView from './components/CollectionView'
 import RadioView from './components/RadioView'
 import MiniPlayer from './components/MiniPlayer'
 import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
-import { useLibraryStore } from './stores/libraryStore'
+import { useLibraryStore, visibleTracks } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore } from './stores/lyricsStore'
@@ -23,7 +23,7 @@ export default function App() {
   const view = useNavStore((s) => s.view)
   const setView = useNavStore((s) => s.setView)
   const playlists = usePlaylistStore((s) => s.playlists)
-  const tracks = useLibraryStore((s) => s.tracks)
+  const tracks = useLibraryStore(visibleTracks)
 
   useEffect(() => {
     const unsubscribe = initPlayerSubscriptions()

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Track } from '@shared/types'
 import { localRecommendations } from '@shared/recommend'
-import { useLibraryStore } from '../stores/libraryStore'
+import { useLibraryStore, visibleTracks } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useStatsStore } from '../stores/statsStore'
@@ -21,7 +21,7 @@ function findInLibrary(library: Track[], s: SimilarTrack): Track | undefined {
 
 function LastfmSection({ seed }: { seed: Track }) {
   const apiKey = useSettingsStore((s) => s.lastfmApiKey)
-  const tracks = useLibraryStore((s) => s.tracks)
+  const tracks = useLibraryStore(visibleTracks)
   const setView = useNavStore((s) => s.setView)
   const [similar, setSimilar] = useState<SimilarTrack[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,7 +91,7 @@ function LastfmSection({ seed }: { seed: Track }) {
 
 /** «Радио по треку»: локальные рекомендации + похожие с Last.fm */
 export default function RadioView({ trackId }: { trackId: string }) {
-  const tracks = useLibraryStore((s) => s.tracks)
+  const tracks = useLibraryStore(visibleTracks)
   const stats = useStatsStore((s) => s.stats)
   const seed = tracks.find((t) => t.id === trackId)
 

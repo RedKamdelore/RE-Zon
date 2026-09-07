@@ -13,16 +13,36 @@ function mergeById(base: Track[], extra: Track[]): Track[] {
 
 interface LibraryState {
   tracks: Track[]
+  hiddenIds: string[] // id скрытых треков (persist → hiddenTracks); tracks хранит их все
   loading: boolean
   usingDemo: boolean
   init: (data?: PersistedData) => Promise<void> // data из App (единый loadData); без него — сам грузит
   addFolder: () => Promise<void> // pickFolder → persist musicFolders → rescan
   removeFolder: (folder: string) => Promise<void> // persist без папки → rescan (пусто → демо)
   addTracks: (tracks: Track[]) => void // внешние треки (VK и др.): дописывает, дедуп по id
+  hideTrack: (id: string) => void // скрыть из библиотеки (исчезает из списков, играющий доигрывает)
+  unhideTrack: (id: string) => void // вернуть скрытый трек
+}
+
+// Мемоизированный селектор видимых треков: zustand сравнивает снапшоты по
+// Object.is, поэтому фильтр кешируется по ссылкам tracks/hiddenIds — иначе
+// useSyncExternalStore упал бы на «getSnapshot should be cached».
+let visibleCache: { tracks: Track[]; hidden: string[]; result: Track[] } | null = null
+
+/** Селектор: треки библиотеки без скрытых (useLibraryStore(visibleTracks)) */
+export function visibleTracks(s: Pick<LibraryState, 'tracks' | 'hiddenIds'>): Track[] {
+  if (visibleCache && visibleCache.tracks === s.tracks && visibleCache.hidden === s.hiddenIds) {
+    return visibleCache.result
+  }
+  const hidden = new Set(s.hiddenIds)
+  const result = s.tracks.filter((t) => !hidden.has(t.id))
+  visibleCache = { tracks: s.tracks, hidden: s.hiddenIds, result }
+  return result
 }
 
 export const useLibraryStore = create<LibraryState>()((set, get) => ({
   tracks: [],
+  hiddenIds: [],
   loading: true,
   usingDemo: false,
 
@@ -46,20 +66,35 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     }
     try {
       const d = data ?? (await window.api.loadData())
+      const hiddenIds = d.hiddenTracks ?? []
       // Персистенс импортированных треков: докидываем их к отсканированной
       // библиотеке, чтобы плейлисты с vk:/sc: id ожили после рестарта
       const imported = d.importedTracks ?? []
       if (d.musicFolders.length === 0) {
         const tracks = await window.api.demoLibrary()
-        set({ tracks: mergeById(tracks, imported), usingDemo: true, loading: false })
+        set({ tracks: mergeById(tracks, imported), hiddenIds, usingDemo: true, loading: false })
       } else {
         const tracks = await window.api.scanLibrary(d.musicFolders)
-        set({ tracks: mergeById(tracks, imported), usingDemo: false, loading: false })
+        set({ tracks: mergeById(tracks, imported), hiddenIds, usingDemo: false, loading: false })
       }
     } catch (e) {
       console.error('library init failed:', e)
       set({ loading: false })
     }
+  },
+
+  hideTrack: (id) => {
+    if (get().hiddenIds.includes(id)) return
+    const hiddenIds = [...get().hiddenIds, id]
+    set({ hiddenIds })
+    persistPatch({ hiddenTracks: hiddenIds })
+  },
+
+  unhideTrack: (id) => {
+    if (!get().hiddenIds.includes(id)) return
+    const hiddenIds = get().hiddenIds.filter((x) => x !== id)
+    set({ hiddenIds })
+    persistPatch({ hiddenTracks: hiddenIds })
   },
 
   addFolder: async () => {

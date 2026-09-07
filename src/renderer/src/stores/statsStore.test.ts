@@ -20,6 +20,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     lastfmProxy: '',
     importSources: {},
     importedTracks: [],
+    hiddenTracks: [],
     ...overrides,
   }
 }

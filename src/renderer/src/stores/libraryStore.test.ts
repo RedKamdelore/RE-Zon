@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { useLibraryStore } from './libraryStore'
+import { useLibraryStore, visibleTracks } from './libraryStore'
 import { usePlaylistStore, setPersistedBase, getPersistedBase } from './playlistStore'
 import { defaultTheme } from '@shared/themeModel'
 import type { PersistedData, Track } from '@shared/types'
@@ -19,6 +19,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
     lastfmProxy: '',
     importSources: {},
     importedTracks: [],
+    hiddenTracks: [],
     ...overrides,
   }
 }
@@ -209,5 +210,83 @@ describe('libraryStore.removeFolder', () => {
     expect(getPersistedBase()?.musicFolders).toEqual([])
     expect(demoLibrary).toHaveBeenCalled()
     expect(useLibraryStore.getState().usingDemo).toBe(true)
+  })
+})
+
+describe('libraryStore hidden tracks', () => {
+  const t = (id: string): Track => ({
+    id, sourceId: 'local', title: 'T', artist: 'A', album: 'X', durationSec: 1, filePath: `C:\\${id}.mp3`,
+  })
+
+  beforeEach(() => {
+    useLibraryStore.setState({
+      tracks: [t('local:a'), t('local:b'), t('local:c')],
+      hiddenIds: [],
+      loading: false,
+      usingDemo: false,
+    })
+    setPersistedBase(null)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    delete (globalThis as Record<string, unknown>).window
+    setPersistedBase(null)
+  })
+
+  it('hideTrack marks id hidden and visibleTracks filters it out', () => {
+    useLibraryStore.getState().hideTrack('local:b')
+    expect(useLibraryStore.getState().hiddenIds).toEqual(['local:b'])
+    // tracks хранит все треки, visibleTracks — без скрытых
+    expect(useLibraryStore.getState().tracks).toHaveLength(3)
+    expect(visibleTracks(useLibraryStore.getState()).map((x) => x.id)).toEqual(['local:a', 'local:c'])
+  })
+
+  it('hideTrack is idempotent', () => {
+    useLibraryStore.getState().hideTrack('local:b')
+    useLibraryStore.getState().hideTrack('local:b')
+    expect(useLibraryStore.getState().hiddenIds).toEqual(['local:b'])
+  })
+
+  it('unhideTrack returns the track to visibleTracks', () => {
+    useLibraryStore.getState().hideTrack('local:b')
+    useLibraryStore.getState().unhideTrack('local:b')
+    expect(useLibraryStore.getState().hiddenIds).toEqual([])
+    expect(visibleTracks(useLibraryStore.getState())).toHaveLength(3)
+    // unhide не-скрытого трека — no-op
+    useLibraryStore.getState().unhideTrack('local:b')
+    expect(useLibraryStore.getState().hiddenIds).toEqual([])
+  })
+
+  it('visibleTracks is memoized by tracks/hiddenIds references', () => {
+    const s = useLibraryStore.getState()
+    expect(visibleTracks(s)).toBe(visibleTracks(s))
+  })
+
+  it('persists hiddenTracks via debounced saveData', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+    useLibraryStore.getState().hideTrack('local:a')
+    useLibraryStore.getState().hideTrack('local:c')
+    vi.advanceTimersByTime(500)
+    expect(saveData).toHaveBeenCalledTimes(1)
+    expect((saveData.mock.calls[0][0] as PersistedData).hiddenTracks).toEqual(['local:a', 'local:c'])
+    expect(getPersistedBase()?.hiddenTracks).toEqual(['local:a', 'local:c'])
+
+    useLibraryStore.getState().unhideTrack('local:a')
+    vi.advanceTimersByTime(500)
+    expect((saveData.mock.calls[1][0] as PersistedData).hiddenTracks).toEqual(['local:c'])
+  })
+
+  it('init loads hiddenTracks into hiddenIds', async () => {
+    useLibraryStore.setState({ tracks: [], hiddenIds: [] })
+    ;(globalThis as Record<string, unknown>).window = {
+      api: { scanLibrary: vi.fn().mockResolvedValue([t('local:a'), t('local:b')]) },
+    }
+    await useLibraryStore.getState().init(makeBase({ hiddenTracks: ['local:b'] }))
+    expect(useLibraryStore.getState().hiddenIds).toEqual(['local:b'])
+    expect(visibleTracks(useLibraryStore.getState()).map((x) => x.id)).toEqual(['local:a'])
   })
 })

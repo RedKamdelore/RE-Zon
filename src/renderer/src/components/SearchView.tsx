@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { searchTracks } from '@shared/search'
-import { useLibraryStore } from '../stores/libraryStore'
+import { useLibraryStore, visibleTracks } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 import TrackList from './TrackList'
 import { SearchIcon, MusicNoteIcon } from './icons'
 
 export default function SearchView() {
-  const tracks = useLibraryStore((s) => s.tracks)
+  const tracks = useLibraryStore(visibleTracks)
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)

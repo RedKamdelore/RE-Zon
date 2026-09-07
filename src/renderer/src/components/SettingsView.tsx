@@ -63,6 +63,8 @@ export default function SettingsView() {
   const lastfmApiKey = useSettingsStore((s) => s.lastfmApiKey)
   const lastfmProxy = useSettingsStore((s) => s.lastfmProxy)
   const loading = useLibraryStore((s) => s.loading)
+  const allTracks = useLibraryStore((s) => s.tracks)
+  const hiddenIds = useLibraryStore((s) => s.hiddenIds)
   // musicFolders живут только в persisted base — локальный снапшот, обновляем после add/remove
   const [folders, setFolders] = useState<string[]>(() => getPersistedBase()?.musicFolders ?? [])
   const [savingTheme, setSavingTheme] = useState(false)
@@ -73,6 +75,11 @@ export default function SettingsView() {
   const theme = appearance.theme
 
   const refreshFolders = (): void => setFolders(getPersistedBase()?.musicFolders ?? [])
+
+  // Скрытые треки резолвятся из полной библиотеки (tracks хранит и скрытые)
+  const hiddenTracks = hiddenIds
+    .map((id) => allTracks.find((t) => t.id === id))
+    .filter((t): t is (typeof allTracks)[number] => t !== undefined)
 
   const addFolder = async (): Promise<void> => {
     await useLibraryStore.getState().addFolder()
@@ -477,6 +484,32 @@ export default function SettingsView() {
         <button className="btn-outline" disabled={loading} onClick={() => void addFolder()}>
           Добавить папку
         </button>
+      </section>
+
+      <section className="settings-section">
+        <h2>
+          Скрытые треки
+          {hiddenTracks.length > 0 && <span className="muted"> ({hiddenTracks.length})</span>}
+        </h2>
+        {hiddenTracks.length === 0 ? (
+          <p className="muted">Нет скрытых треков</p>
+        ) : (
+          <ul className="folder-list">
+            {hiddenTracks.map((t) => (
+              <li key={t.id} className="folder-row">
+                <span className="folder-path" title={`${t.artist} — ${t.title}`}>
+                  {t.title} — {t.artist}
+                </span>
+                <button
+                  className="btn-outline"
+                  onClick={() => useLibraryStore.getState().unhideTrack(t.id)}
+                >
+                  Вернуть
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </>
   )

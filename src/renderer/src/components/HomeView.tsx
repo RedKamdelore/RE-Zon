@@ -1,5 +1,5 @@
 import type { Track } from '@shared/types'
-import { useLibraryStore } from '../stores/libraryStore'
+import { useLibraryStore, visibleTracks } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
 import TrackList from './TrackList'
@@ -37,7 +37,7 @@ function deriveAlbums(tracks: Track[]): Tile[] {
 }
 
 export default function HomeView() {
-  const tracks = useLibraryStore((s) => s.tracks)
+  const tracks = useLibraryStore(visibleTracks)
   const loading = useLibraryStore((s) => s.loading)
   const usingDemo = useLibraryStore((s) => s.usingDemo)
   const addFolder = useLibraryStore((s) => s.addFolder)

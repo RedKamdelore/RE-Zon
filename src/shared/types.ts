@@ -53,4 +53,7 @@ export interface PersistedData {
   // Импортированные внешние треки (VK, SoundCloud): плейлисты ссылаются на их id,
   // поэтому без персистентности после рестарта ссылки вели бы в никуда.
   importedTracks: Track[];
+  // id треков, скрытых пользователем из библиотеки: остаются в tracks,
+  // но фильтруются из всех списков (visibleTracks в libraryStore)
+  hiddenTracks: string[];
 }

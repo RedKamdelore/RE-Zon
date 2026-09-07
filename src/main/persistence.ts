@@ -18,6 +18,7 @@ export const DEFAULT_DATA: PersistedData = {
   lastfmProxy: '',
   importSources: {},
   importedTracks: [],
+  hiddenTracks: [],
 }
 
 /** Формат appearance до V3-1: плоские skin/accent/radius */
@@ -43,6 +44,7 @@ export interface PersistedDataV2 {
   lastfmProxy?: string;
   importSources?: Record<string, unknown>;
   importedTracks?: PersistedData['importedTracks'];
+  hiddenTracks?: PersistedData['hiddenTracks'];
 }
 
 /** Старый формат файла player-data.json (до V2-1) */

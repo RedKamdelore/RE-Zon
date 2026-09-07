@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Track } from '@shared/types'
 import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
+import { useLibraryStore } from '../stores/libraryStore'
 import { useNavStore } from '../stores/navStore'
 import { fmt } from '../utils/format'
 import { PlayIcon, ClockIcon, MusicNoteIcon } from './icons'
@@ -164,6 +165,16 @@ function ContextMenu({
             Показать в папке
           </button>
         )}
+        <div className="ctx-sep" />
+        <button
+          className="ctx-item"
+          onClick={() => {
+            useLibraryStore.getState().hideTrack(t.id)
+            onClose()
+          }}
+        >
+          Скрыть из библиотеки
+        </button>
       </div>
       {pickerOpen && (
         <div className="ctx-menu ctx-submenu" style={{ left: submenuLeft, top: pos.top }}>
