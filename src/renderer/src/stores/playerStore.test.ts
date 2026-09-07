@@ -597,6 +597,68 @@ describe('soundcloud stream resolution', () => {
     await Promise.resolve()
     expect(calls.play).toEqual([mediaUrl(makeTrack(2).filePath)])
   })
+
+  it('manual next with crossfade>0 into a SC track resolves the stream before crossfadeTo', async () => {
+    const scResolveStream = vi.fn().mockResolvedValue('https://cf-media.sndcdn.com/final.mp3')
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    const xfStore = createPlayerStore(engine, () => 5)
+    xfStore.getState().playTracks([makeTrack(1), scTrack], 0)
+    xfStore.getState().next({ manual: true })
+    // sync crossfadeTo не вызывается — ждём резолв
+    expect(calls.crossfade).toHaveLength(0)
+    expect(xfStore.getState().pos).toBe(1) // UI переключается сразу
+    await vi.waitFor(() =>
+      expect(calls.crossfade).toEqual([['https://cf-media.sndcdn.com/final.mp3', 5]]),
+    )
+    expect(scResolveStream).toHaveBeenCalledWith(scTrack.filePath)
+  })
+
+  it('auto crossfade into a SC track resolves the stream before crossfadeTo', async () => {
+    const scResolveStream = vi.fn().mockResolvedValue('https://cf-media.sndcdn.com/final.mp3')
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    const fake = makeFakeEngine()
+    const xfStore = createPlayerStore(fake.engine, () => 5)
+    xfStore.getState().playTracks([makeTrack(1), scTrack], 0)
+    initPlayerSubscriptions(fake.engine, xfStore)
+    ;(fake.engine.element as { currentTime: number }).currentTime = 175
+    fake.fire('timeupdate')
+    expect(fake.calls.crossfade).toHaveLength(0) // sync не вызывается
+    await vi.waitFor(() =>
+      expect(fake.calls.crossfade).toEqual([['https://cf-media.sndcdn.com/final.mp3', 5]]),
+    )
+  })
+
+  it('crossfade into a SC track skips to the next track when resolution fails', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const scResolveStream = vi.fn().mockRejectedValue(new Error('HTTP 404'))
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    const xfStore = createPlayerStore(engine, () => 5)
+    xfStore.getState().playTracks([makeTrack(1), scTrack, makeTrack(3)], 0)
+    xfStore.getState().next({ manual: true })
+    expect(xfStore.getState().pos).toBe(1)
+    await vi.waitFor(() => expect(calls.play).toEqual([
+      mediaUrl(makeTrack(1).filePath),
+      mediaUrl(makeTrack(3).filePath),
+    ]))
+    expect(xfStore.getState().pos).toBe(2)
+    expect(calls.crossfade).toHaveLength(0)
+    errSpy.mockRestore()
+  })
+
+  it('does not crossfade to a stale url if the user switched track during resolution', async () => {
+    let resolveIt: (url: string) => void = () => {}
+    const scResolveStream = vi.fn(
+      () => new Promise<string>((res) => { resolveIt = res }),
+    )
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    const xfStore = createPlayerStore(engine, () => 5)
+    xfStore.getState().playTracks([makeTrack(1), scTrack, makeTrack(3)], 0)
+    xfStore.getState().next({ manual: true }) // кроссфейд в scTrack, резолв висит
+    xfStore.getState().next({ manual: true }) // ушли на track3 до завершения резолва
+    resolveIt('https://cf-media.sndcdn.com/late.mp3')
+    await Promise.resolve()
+    expect(calls.crossfade).toEqual([[mediaUrl(makeTrack(3).filePath), 5]]) // только track3
+  })
 })
 
 describe('mediaUrl', () => {

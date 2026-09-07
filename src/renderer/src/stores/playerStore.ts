@@ -62,34 +62,68 @@ export function createPlayerStore(
   // playTracks/next/prev и при выходе из окна конца трека (новый трек, seek назад).
   let crossfadeDone = false
   return create<PlayerState>()((set, get) => {
-  const playAt = (state: Pick<PlayerState, 'queue' | 'order' | 'next'>, pos: number): void => {
-    const track = state.queue[state.order[pos]]
-    // SoundCloud: filePath — transcoding API URL (отдаёт JSON {url}), финальный
-    // mp3 резолвим лениво при старте. Ошибка резолва — как у мёртвого файла:
-    // пропускаем трек (auto-семантика next).
+  /**
+   * SoundCloud: filePath — transcoding API URL (отдаёт JSON {url}), финальный
+   * mp3 резолвим лениво при старте. Общая точка для play/crossfade-путей:
+   * onReady вызывается с финальным URL (для локальных/VK — синхронно),
+   * onFail — только при ошибке SC-резолва.
+   */
+  const resolvePlayableUrl = (
+    track: Track,
+    onReady: (url: string) => void,
+    onFail: (e: unknown) => void,
+  ): void => {
     if (
       track.sourceId === 'soundcloud' &&
       typeof window !== 'undefined' &&
       typeof window.api?.scResolveStream === 'function'
     ) {
-      window.api
-        .scResolveStream(track.filePath)
-        .then((url) => {
-          // За время резолва пользователь мог переключить трек — не переигрываем
-          const current = get().queue[get().order[get().pos]]
-          if (current?.id === track.id) engine.play(url)
-        })
-        .catch((e) => {
-          console.error('soundcloud resolve failed, skipping:', e)
-          const current = get().queue[get().order[get().pos]]
-          if (current?.id === track.id) state.next()
-        })
+      window.api.scResolveStream(track.filePath).then(onReady, onFail)
     } else {
-      engine.play(resolveTrackUrl(track))
+      onReady(resolveTrackUrl(track))
     }
+  }
+
+  const playAt = (state: Pick<PlayerState, 'queue' | 'order' | 'next'>, pos: number): void => {
+    const track = state.queue[state.order[pos]]
+    // Ошибка резолва — как у мёртвого файла: пропускаем трек (auto-семантика next).
+    resolvePlayableUrl(
+      track,
+      (url) => {
+        // За время резолва пользователь мог переключить трек — не переигрываем
+        const current = get().queue[get().order[get().pos]]
+        if (current?.id === track.id) engine.play(url)
+      },
+      (e) => {
+        console.error('soundcloud resolve failed, skipping:', e)
+        const current = get().queue[get().order[get().pos]]
+        if (current?.id === track.id) state.next()
+      },
+    )
     // Статистика прослушиваний: пишем именно в точке реального старта трека
     // (playTracks/next/prev). Кроссфейд-пути зовут recordPlay сами (см. ниже).
     recordPlay(track.id)
+  }
+
+  // Кроссфейд: URL резолвится так же, как в playAt (SoundCloud — финальный mp3,
+  // а не transcoding JSON URL, иначе движок получил бы JSON и error-skipнул трек).
+  // pos уже переключён на трек; стейл-проверка и ошибка-резолва общие с playAt.
+  const crossfadeToTrack = (track: Track, xfSec: number): void => {
+    if (!engine.crossfadeTo) return
+    resolvePlayableUrl(
+      track,
+      (url) => {
+        // За время резолва пользователь мог переключить трек — не переигрываем
+        const current = get().queue[get().order[get().pos]]
+        if (current?.id !== track.id) return
+        engine.crossfadeTo?.(url, xfSec)
+      },
+      (e) => {
+        console.error('soundcloud resolve failed, skipping:', e)
+        const current = get().queue[get().order[get().pos]]
+        if (current?.id === track.id) get().next()
+      },
+    )
   }
 
   return {
@@ -144,7 +178,7 @@ export function createPlayerStore(
       const xfSec = opts?.manual && get().playing ? getCrossfadeSec() : 0
       set({ pos: nextPos, currentSec: 0, playing: true })
       if (xfSec > 0 && engine.crossfadeTo) {
-        engine.crossfadeTo(resolveTrackUrl(queue[order[nextPos]]), xfSec)
+        crossfadeToTrack(queue[order[nextPos]], xfSec)
         recordPlay(queue[order[nextPos]].id)
         return
       }
@@ -303,7 +337,7 @@ export function createPlayerStore(
       if (nextPos === null) return // конец очереди при repeat off — доигрываем до ended
       crossfadeDone = true
       set({ pos: nextPos, currentSec: 0, playing: true })
-      engine.crossfadeTo(resolveTrackUrl(queue[order[nextPos]]), xfSec)
+      crossfadeToTrack(queue[order[nextPos]], xfSec)
       recordPlay(queue[order[nextPos]].id)
     },
   }
