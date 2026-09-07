@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Track } from '@shared/types'
+import { sortTracks, nextSortDir, type SortKey, type SortDir } from '@shared/sorting'
 import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
 import { useLibraryStore } from '../stores/libraryStore'
@@ -11,7 +12,7 @@ import { PlayIcon, ClockIcon, MusicNoteIcon, HeartIcon } from './icons'
 interface TrackListProps {
   tracks: Track[]
   onPlay?: (tracks: Track[], index: number) => void // default: playerStore.playTracks
-  onRemoveTrack?: (index: number) => void // если задан — в меню появляется «Удалить из плейлиста»
+  onRemoveTrack?: (trackId: string) => void // если задан — в меню появляется «Удалить из плейлиста»
 }
 
 interface MenuState {
@@ -32,7 +33,7 @@ function ContextMenu({
   menu: MenuState
   hasRemove: boolean
   onPlayTrack: (index: number) => void
-  onRemove: (index: number) => void
+  onRemove: (trackId: string) => void
   onClose: () => void
 }) {
   const playlists = usePlaylistStore((s) => s.playlists)
@@ -116,7 +117,7 @@ function ContextMenu({
           <button
             className="ctx-item"
             onClick={() => {
-              onRemove(menu.index)
+              onRemove(menu.track.id)
               onClose()
             }}
           >
@@ -214,6 +215,9 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
     s.order.length > 0 ? s.queue[s.order[s.pos]]?.id : undefined,
   )
   const [menu, setMenu] = useState<MenuState | null>(null)
+  // Сортировка по столбцам (V3-4d): null — исходный порядок
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null)
+  const sorted = useMemo(() => (sort ? sortTracks(tracks, sort.key, sort.dir) : tracks), [tracks, sort])
 
   const play = onPlay ?? ((list: Track[], index: number) => usePlayerStore.getState().playTracks(list, index))
 
@@ -221,21 +225,39 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
     return <p className="muted">Здесь пока ничего нет</p>
   }
 
+  const headerCell = (key: SortKey, label: string): React.ReactNode => (
+    <button
+      className={`tl-sort${sort?.key === key ? ` sorted ${sort.dir}` : ''}`}
+      onClick={() => setSort((prev) => nextSortDir(prev, key))}
+    >
+      {label}
+      {sort?.key === key && <span className="tl-sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>}
+    </button>
+  )
+
   return (
     <div className="tl">
       <div className="tl-header">
         <span className="tl-num">#</span>
-        <span>Название</span>
-        <span>Альбом</span>
+        {headerCell('title', 'Название')}
+        {headerCell('album', 'Альбом')}
         <span className="tl-duration">
-          <ClockIcon size={16} />
+          <button
+            className={`tl-sort${sort?.key === 'durationSec' ? ` sorted ${sort.dir}` : ''}`}
+            onClick={() => setSort((prev) => nextSortDir(prev, 'durationSec'))}
+          >
+            <ClockIcon size={16} />
+            {sort?.key === 'durationSec' && (
+              <span className="tl-sort-arrow">{sort.dir === 'asc' ? '▲' : '▼'}</span>
+            )}
+          </button>
         </span>
       </div>
-      {tracks.map((t, i) => (
+      {sorted.map((t, i) => (
         <div
           key={t.id}
           className="tl-row"
-          onClick={() => play(tracks, i)}
+          onClick={() => play(sorted, i)}
           onContextMenu={(e) => {
             e.preventDefault()
             setMenu({ x: e.clientX, y: e.clientY, track: t, index: i })
@@ -266,7 +288,7 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
         <ContextMenu
           menu={menu}
           hasRemove={onRemoveTrack !== undefined}
-          onPlayTrack={(index) => play(tracks, index)}
+          onPlayTrack={(index) => play(sorted, index)}
           onRemove={(index) => onRemoveTrack?.(index)}
           onClose={() => setMenu(null)}
         />

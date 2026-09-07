@@ -20,11 +20,9 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
     .map((id) => byId.get(id))
     .filter((t): t is Track => t !== undefined)
 
-  // resolved[i] — не всегда trackIds[i] (могли отфильтроваться отсутствующие треки),
-  // поэтому индекс в trackIds ищем по id (addTrack дедуплицирует, id уникален)
-  const removeAt = (resolvedIndex: number): void => {
-    const track = resolved[resolvedIndex]
-    const idx = playlist.trackIds.indexOf(track.id)
+  // удаление по id трека (не по индексу — TrackList может быть отсортирован)
+  const removeAt = (trackId: string): void => {
+    const idx = playlist.trackIds.indexOf(trackId)
     if (idx >= 0) usePlaylistStore.getState().removeTrack(playlist.id, idx)
   }
 
@@ -75,8 +73,7 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
         <p className="muted">В этом плейлисте пока нет треков</p>
       ) : (
         <TrackList tracks={resolved} onRemoveTrack={removeAt} />
-      )}
-    </>
+      )}    </>
   )
 }
 

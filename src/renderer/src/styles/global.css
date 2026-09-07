@@ -1448,6 +1448,31 @@ body {
   color: var(--accent);
 }
 
+/* --- Сортировка столбцов (V3-4) --- */
+.tl-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tl-sort:hover,
+.tl-sort.sorted {
+  color: var(--text-primary);
+}
+
+.tl-sort-arrow {
+  font-size: 10px;
+  color: var(--accent);
+}
+
 .link-btn {
   padding: 0;
   border: none;
