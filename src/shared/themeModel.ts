@@ -61,6 +61,20 @@ export function darkenHex(hex: string, amt: number): string {
   return `#${((mix(r) << 16) | (mix(g) << 8) | mix(b)).toString(16).padStart(6, '0')}`
 }
 
+/** Смешивает два hex-цвета: amt=0 → hex, amt=1 → target (пезультат — hex) */
+export function mixHex(hex: string, target: string, amt: number): string {
+  const t = Math.max(0, Math.min(1, amt))
+  const [r1, g1, b1] = parseHex(hex)
+  const [r2, g2, b2] = parseHex(target)
+  const mix = (a: number, b: number): number => Math.round(a + (b - a) * t)
+  return `#${((mix(r1, r2) << 16) | (mix(g1, g2) << 8) | mix(b1, b2)).toString(16).padStart(6, '0')}`
+}
+
+/** Полупрозрачный fg поверх bg → ближайший непрозрачный hex (для расчётов) */
+export function blendOver(fgHex: string, bgHex: string, alpha: number): string {
+  return mixHex(bgHex, fgHex, Math.max(0, Math.min(1, alpha)))
+}
+
 /** Относительная яркость 0..1 (для выбора направления производных токенов) */
 function luminance(hex: string): number {
   const [r, g, b] = parseHex(hex)
@@ -69,6 +83,31 @@ function luminance(hex: string): number {
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
   }
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+/** Контраст WCAG двух цветов: 1..21 (4.5 — «AA», 3.0 — «AA для крупного») */
+export function contrastRatio(fg: string, bg: string): number {
+  const lf = luminance(fg)
+  const lb = luminance(bg)
+  const hi = Math.max(lf, lb)
+  const lo = Math.min(lf, lb)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * Автоконтраст (V3 «Материалы 2.0»): если fg на фоне bg даёт контраст ниже
+ * minRatio, цвет плавно уводится к чёрному/белому (противоположному яркости
+ * фона), пока читаемость не будет достигнута. Уже читаемые цвета не трогаются.
+ */
+export function ensureContrast(fg: string, bg: string, minRatio = 4.5): string {
+  const norm = (h: string): string => (h.startsWith('#') ? h.toLowerCase() : `#${h.toLowerCase()}`)
+  if (contrastRatio(fg, bg) >= minRatio) return norm(fg)
+  const target = luminance(bg) > 0.5 ? '#000000' : '#ffffff'
+  for (let i = 1; i <= 20; i++) {
+    const mixed = mixHex(fg, target, i / 20)
+    if (contrastRatio(mixed, bg) >= minRatio) return mixed
+  }
+  return target
 }
 
 // --- Дефолт и пресеты --------------------------------------------------------
@@ -154,15 +193,31 @@ export const BUILTIN_PRESETS: Record<string, ThemeConfig> = {
 
 // --- Генератор CSS ------------------------------------------------------------
 
+/** Селекторы «панелей» — блоков интерфейса, несущих материал */
+const PANELS = '.sidebar-card, .right-panel, .ctx-menu, .app.mini, .playerbar'
+/** Интерактивные элементы (кнопки/пресеты) — для материала-специфичных эффектов */
+const CHIPS = '.btn-outline, .eq-preset, .skin-card, .accent-swatch, .import-card, .tile'
+/** Поля ввода */
+const INPUTS = '.settings-input, .search-input, .rp-lyrics-textarea, .pl-name-input, .rename-input, .theme-name-input'
+
 /**
  * Генерирует CSS темы: токены в :root (включая производные — тайлы, hover,
- * popup и т.д.), фон приложения (цвет/градиент/картинка с blur+dim через
- * #root::before) и правила материала панелей (glass/gloss/neumorphic).
+ * popup), автоконтраст текста (WCAG), фон приложения (цвет/градиент/картинка
+ * с blur+dim через #root::before) и правила материалов панелей (2.0 —
+ * flat/glass/gloss/neumorphic, каждый со своим характером на всём UI).
  */
 export function themeToCss(t: ThemeConfig): string {
-  const translucent = t.panelMaterial === 'glass' || t.panelMaterial === 'gloss'
+  const mat = t.panelMaterial
+  const translucent = mat === 'glass' || mat === 'gloss'
   const lightUi = luminance(t.bgApp) > 0.45
-  const lightPanel = luminance(t.bgPanel) > 0.5
+  const shadow = Math.max(0, Math.min(1, t.shadowStrength))
+
+  // Neumorphic — классика Soft UI: панель сливается с фоном, рельеф из теней.
+  // Для остальных материалов панель красится своим цветом.
+  const panelBase = mat === 'neumorphic' ? t.bgApp : t.bgPanel
+
+  // Эффективная (визуальная) непрозрачная панель — для расчёта контраста
+  const effPanel = translucent ? blendOver(t.bgPanel, t.bgApp, t.panelOpacity) : panelBase
 
   // Производные токены: у тёмных панелей тайлы светлее, у светлых — темнее
   let bgPanel: string, bgTile: string, bgTileHover: string, sliderTrack: string, borderSubtle: string, bgPopup: string
@@ -171,27 +226,37 @@ export function themeToCss(t: ThemeConfig): string {
     bgTile = hexToRgba(t.bgPanel, t.panelOpacity * 0.75)
     bgTileHover = hexToRgba(t.bgPanel, Math.min(1, t.panelOpacity + 0.06))
     sliderTrack = hexToRgba(t.bgPanel, Math.min(1, t.panelOpacity + 0.1))
-    borderSubtle = hexToRgba(t.bgPanel, Math.min(1, t.panelOpacity + 0.06))
+    borderSubtle = hexToRgba(lightUi ? '#ffffff' : t.bgPanel, Math.min(1, t.panelOpacity + 0.06))
     bgPopup = hexToRgba(lightUi ? t.bgPanel : t.bgApp, 0.85)
   } else {
-    bgPanel = t.bgPanel
-    bgTile = lightPanel ? darkenHex(t.bgPanel, 0.06) : lightenHex(t.bgPanel, 0.095)
-    bgTileHover = lightPanel ? darkenHex(t.bgPanel, 0.11) : lightenHex(t.bgPanel, 0.157)
-    sliderTrack = lightPanel ? darkenHex(t.bgPanel, 0.22) : lightenHex(t.bgPanel, 0.3)
+    const lightPanel = luminance(panelBase) > 0.5
+    bgPanel = panelBase
+    bgTile = lightPanel ? darkenHex(panelBase, 0.06) : lightenHex(panelBase, 0.095)
+    bgTileHover = lightPanel ? darkenHex(panelBase, 0.11) : lightenHex(panelBase, 0.157)
+    sliderTrack = lightPanel ? darkenHex(panelBase, 0.22) : lightenHex(panelBase, 0.3)
     borderSubtle = bgTileHover
-    bgPopup = lightPanel ? t.bgPanel : bgTileHover
+    bgPopup = lightPanel ? panelBase : bgTileHover
   }
 
-  const hoverOverlay = t.panelMaterial === 'gloss'
-    ? 'rgba(255, 255, 255, 0.4)'
-    : lightUi
-      ? 'rgba(0, 0, 0, 0.07)'
-      : 'rgba(255, 255, 255, 0.1)'
-  const sliderThumb = !translucent && lightUi ? '#111111' : '#ffffff'
-  const onAccent = translucent ? '#ffffff' : '#000000'
-  const playBtnFg = luminance(t.textPrimary) > 0.5 ? '#000000' : '#ffffff'
-  const badgeBg = translucent ? bgTileHover : lightUi ? '#111111' : '#000000'
-  const shadow = Math.max(0, Math.min(1, t.shadowStrength))
+  // Автоконтраст: текст обязан читаться на реальном фоне (WCAG AA/близко).
+  // Первичный — на фоне приложения, вторичный — на тайле.
+  const effTile = translucent ? blendOver(t.bgPanel, t.bgApp, t.panelOpacity * 0.75) : bgTile
+  const textPrimary = ensureContrast(t.textPrimary, t.bgApp, 4.5)
+  const textSecondary = ensureContrast(
+    ensureContrast(t.textSecondary, effTile, 3.5),
+    t.bgApp,
+    3.5,
+  )
+
+  const hoverOverlay = lightUi ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.1)'
+  const sliderThumb = !translucent && lightUi ? ensureContrast('#111111', bgTile, 3) : '#ffffff'
+  // Текст на акценте: выбираем чёрный или белый — кто читаемее
+  const onAccent =
+    contrastRatio('#000000', t.accent) >= contrastRatio('#ffffff', t.accent)
+      ? '#000000'
+      : '#ffffff'
+  const playBtnFg = onAccent
+  const badgeBg = translucent ? hexToRgba(t.bgPanel, Math.min(1, t.panelOpacity + 0.3)) : lightUi ? '#111111' : '#000000'
 
   const blocks: string[] = []
 
@@ -200,8 +265,8 @@ export function themeToCss(t: ThemeConfig): string {
   --bg-panel: ${bgPanel};
   --bg-tile: ${bgTile};
   --bg-tile-hover: ${bgTileHover};
-  --text-primary: ${t.textPrimary};
-  --text-secondary: ${t.textSecondary};
+  --text-primary: ${textPrimary};
+  --text-secondary: ${textSecondary};
   --accent: ${t.accent};
   --accent-hover: ${lightenHex(t.accent, 0.08)};
   --slider-track: ${sliderTrack};
@@ -216,6 +281,7 @@ export function themeToCss(t: ThemeConfig): string {
   --badge-text: #ffffff;
   --cover-placeholder: linear-gradient(135deg, ${bgTileHover}, ${bgTile});
   --radius-card: ${t.radius}px;
+  --panel-material: ${mat};
 }`)
 
   // --- Фон приложения ---
@@ -236,31 +302,97 @@ export function themeToCss(t: ThemeConfig): string {
 }`)
   }
 
-  // --- Материал панелей ---
-  if (t.panelMaterial === 'glass' || t.panelMaterial === 'gloss') {
-    const glossShadow =
-      t.panelMaterial === 'gloss'
-        ? `\n  box-shadow: inset 0 1px 0 rgba(255, 255, 255, ${t.glossIntensity}), 0 4px 16px rgba(0, 0, 0, ${shadow * 0.5});`
-        : ''
-    blocks.push(`.sidebar-card, .right-panel, .ctx-menu, .app.mini {
-  backdrop-filter: blur(${t.glassBlur}px);
-  -webkit-backdrop-filter: blur(${t.glassBlur}px);${glossShadow}
+  // --- Материалы 2.0 -----------------------------------------------------------
+
+  if (mat === 'flat') {
+    // Премиальный минимализм: волосная рамка + двухслойная ambient-тень
+    blocks.push(`${PANELS} {
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, ${shadow * 0.25}), 0 8px 24px rgba(0, 0, 0, ${shadow * 0.35});
+}`)
+  }
+
+  if (mat === 'glass') {
+    // Vibrancy как в macOS: blur + насыщение цветов под стеклом, светлая
+    // внутренняя рамка, глинт сверху и тень-подъём
+    const rim = lightUi ? 0.5 : 0.14
+    const glint = lightUi ? 0.65 : 0.18
+    blocks.push(`${PANELS} {
+  backdrop-filter: blur(${t.glassBlur}px) saturate(170%);
+  -webkit-backdrop-filter: blur(${t.glassBlur}px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, ${rim});
+  box-shadow: 0 8px 32px rgba(0, 0, 0, ${shadow * 0.55}), inset 0 1px 0 rgba(255, 255, 255, ${glint});
 }`)
     // Sticky-заголовок таблицы — матовое стекло, чтобы скролл читался
     blocks.push(`.tl-header {
-  background: ${hexToRgba(t.bgApp, 0.55)};
-  backdrop-filter: blur(${t.glassBlur}px);
-  -webkit-backdrop-filter: blur(${t.glassBlur}px);
+  background: ${hexToRgba(lightUi ? '#ffffff' : t.bgApp, 0.55)};
+  backdrop-filter: blur(${t.glassBlur}px) saturate(170%);
+  -webkit-backdrop-filter: blur(${t.glassBlur}px) saturate(170%);
+}`)
+    // Стеклянные интерактивы: молочные заливки и светлые рамки
+    blocks.push(`${CHIPS}, ${INPUTS} {
+  border: 1px solid rgba(255, 255, 255, ${lightUi ? 0.35 : 0.12});
 }`)
   }
-  if (t.panelMaterial === 'gloss') {
-    blocks.push(`.pl-play, .tile-play {
-  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+
+  if (mat === 'gloss') {
+    // Frutiger Aero: лакированный пластик — спекулярный блик на верхней
+    // половине панели (::before), насыщенный blur, хромированные кнопки
+    const g = Math.max(0, Math.min(1, t.glossIntensity))
+    blocks.push(`${PANELS} {
+  position: relative;
+  backdrop-filter: blur(${t.glassBlur}px) saturate(160%);
+  -webkit-backdrop-filter: blur(${t.glassBlur}px) saturate(160%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, ${shadow * 0.5});
+}`)
+    blocks.push(`${PANELS}::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, ${(g * 0.55).toFixed(3)}),
+    rgba(255, 255, 255, ${(g * 0.14).toFixed(3)}) 45%,
+    rgba(255, 255, 255, 0) 60%
+  );
+}`)
+    blocks.push(`.tl-header {
+  background: ${hexToRgba(lightUi ? '#ffffff' : t.bgApp, 0.55)};
+  backdrop-filter: blur(${t.glassBlur}px) saturate(160%);
+  -webkit-backdrop-filter: blur(${t.glassBlur}px) saturate(160%);
+}`)
+    // Лакированные кнопки: трёхстоповый градиент + верхний хайлайт
+    blocks.push(`.pl-play, .tile-play, .play-btn {
+  background: linear-gradient(180deg, ${lightenHex(t.accent, 0.28)}, ${t.accent} 45%, ${darkenHex(t.accent, 0.18)});
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, ${(g * 0.6).toFixed(3)}), 0 2px 8px rgba(0, 0, 0, ${shadow * 0.4});
 }`)
   }
-  if (t.panelMaterial === 'neumorphic') {
-    blocks.push(`.sidebar-card, .right-panel, .app.mini {
-  box-shadow: 8px 8px 16px rgba(0, 0, 0, ${shadow}), -8px -8px 16px rgba(255, 255, 255, ${lightUi ? shadow * 0.9 : shadow * 0.1});
+
+  if (mat === 'neumorphic') {
+    // Классический Soft UI: панель = фон, объём из парных теней, цвета теней
+    // выведены из фона — никаких чисто-белых засветов
+    const s = Math.round(6 + 8 * shadow) // 6..14 px
+    const soft = Math.round(2 * s)
+    const neuDark = hexToRgba(darkenHex(t.bgApp, 0.4), Math.min(1, 0.35 + 0.6 * shadow))
+    const neuLight = hexToRgba(lightenHex(t.bgApp, 0.22), Math.min(1, 0.5 + 0.4 * shadow))
+    blocks.push(`${PANELS} {
+  box-shadow: ${s}px ${s}px ${soft}px ${neuDark}, -${s}px -${s}px ${soft}px ${neuLight};
+}`)
+    // Нажатые (inset) интерактивы и инпуты — фирменный приём Soft UI
+    blocks.push(`${CHIPS} {
+  background: ${bgTile};
+  border: none;
+  box-shadow: inset 3px 3px 6px ${neuDark}, inset -3px -3px 6px ${neuLight};
+}`)
+    blocks.push(`${INPUTS} {
+  background: ${bgTile};
+  border: none;
+  box-shadow: inset 3px 3px 6px ${neuDark}, inset -3px -3px 6px ${neuLight};
+}`)
+    blocks.push(`.tile, .import-card {
+  box-shadow: 4px 4px 10px ${neuDark}, -4px -4px 10px ${neuLight};
 }`)
   }
 
