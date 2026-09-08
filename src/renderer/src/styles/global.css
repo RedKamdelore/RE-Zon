@@ -1473,6 +1473,34 @@ body {
   color: var(--accent);
 }
 
+/* --- Значки источников (V3-3b) --- */
+.src-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+  opacity: 0.55;
+  color: currentColor;
+  transition: opacity 0.15s;
+}
+
+.src-badge:hover {
+  opacity: 1;
+}
+
+/* фирменные цвета сервисов поверх currentColor */
+.src-badge.src-vk {
+  color: #0077ff;
+}
+
+.src-badge.src-soundcloud {
+  color: #ff5500;
+}
+
+.src-badge svg {
+  display: block;
+}
+
 .link-btn {
   padding: 0;
   border: none;

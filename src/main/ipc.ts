@@ -3,7 +3,8 @@ import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
 import { loadData, saveData } from './persistence'
 import { scanFolders, demoTracks } from './library'
-import { vkAudioGet, vkAuthUrl, matchVkAuthUrl } from './vk'
+import { fetchVkAudioListWith, matchVkWebAuthUrl, VK_PARTITION, type VkWebFetcher } from './vkWeb'
+import { session as electronSession } from 'electron'
 import { scSearch, scResolveStream } from './soundcloud'
 import { lastfmApi, lfmAuthUrl, matchLfmAuthUrl, lfmGetSession, lfmScrobble, type ScrobblePayload } from './lastfm'
 import { openAuthWindow } from './authWindow'
@@ -42,9 +43,37 @@ export function registerIpc(win: BrowserWindow): void {
   })
   ipcMain.handle('library:scan', (_e, folders: string[]) => scanFolders(folders))
   ipcMain.handle('library:demo', () => demoTracks(DEMO_DIR))
-  ipcMain.handle('vk:import', async (_e, token: string): Promise<VkImportResult> => {
+  /**
+   * VK-импорт через веб-сессию (V3-3b): куки из persist:vk прикладываются
+   * electron-фетчером автоматически. При неудаче сохраняем дамп страницы
+   * в userData для диагностики вёрстки (первый живой прогон).
+   */
+  ipcMain.handle('vk:import', async (): Promise<VkImportResult> => {
     try {
-      return { ok: true, tracks: await vkAudioGet(token) }
+      const ses = electronSession.fromPartition(VK_PARTITION)
+      const fetcher: VkWebFetcher = async (url) => {
+        const res = await ses.fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } })
+        return { status: res.status, html: await res.text() }
+      }
+      let lastHtml = ''
+      const { tracks, unauthorized } = await fetchVkAudioListWith(fetcher, {
+        onPage: (html) => {
+          lastHtml = html
+        },
+      })
+      if (unauthorized) {
+        return { ok: false, error: 'Сессия истекла — нажмите «Подключить VK» и войдите заново' }
+      }
+      if (tracks.length === 0 && lastHtml) {
+        // Разведка: вёрстка могла измениться — дамп для отладки парсера
+        const dumpPath = join(app.getPath('userData'), 'vk-audio-dump.html')
+        await import('fs/promises').then((fs) => fs.writeFile(dumpPath, lastHtml, 'utf-8'))
+        return {
+          ok: false,
+          error: `Не удалось разобрать страницу аудиозаписей. Дамп сохранён: ${dumpPath}`,
+        }
+      }
+      return { ok: true, tracks }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
@@ -115,12 +144,17 @@ export function registerIpc(win: BrowserWindow): void {
     },
   )
 
-  /** Удаляет подключение сервиса */
-  ipcMain.handle('connections:disconnect', (_e, id: ServiceId) => {
+  /** Удаляет подключение сервиса (VK: + очистка веб-сессии) */
+  ipcMain.handle('connections:disconnect', async (_e, id: ServiceId) => {
     const data = loadData()
     const connections = { ...data.connections }
     delete connections[id]
     saveData({ ...data, connections })
+    if (id === 'vk') {
+      // Полный выход: чистим куки/кэш persist:vk
+      const ses = electronSession.fromPartition(VK_PARTITION)
+      await ses.clearStorageData()
+    }
     return true
   })
 
@@ -136,23 +170,29 @@ export function registerIpc(win: BrowserWindow): void {
     return true
   })
 
-  /** OAuth VK: окно → fragment access_token → сохраняем соединение */
-  ipcMain.handle('connect:vk', async (): Promise<{ ok: boolean; error?: string; userId?: string }> => {
-    const auth = (await openAuthWindow(win, {
-      url: vkAuthUrl(),
+  /**
+   * VK через сайт (V3-3b): окно m.vk.com/audio с persist-сессией. Пользователь
+   * входит как в обычный браузер (2FA/SMS работают); куки живут на диске —
+   * повторный вход не нужен месяцами. Матч: URL вернулся на /audio.
+   */
+  ipcMain.handle('connect:vk', async (): Promise<{ ok: boolean; error?: string }> => {
+    const ok = (await openAuthWindow(win, {
+      url: 'https://m.vk.com/audio',
       title: 'Вход ВКонтакте',
-      match: matchVkAuthUrl,
-    })) as Awaited<ReturnType<typeof matchVkAuthUrl>> | null
-    if (!auth) return { ok: false, error: 'Авторизация не завершена' }
+      partition: VK_PARTITION,
+      match: (url) => (matchVkWebAuthUrl(url) ? true : null),
+    })) as boolean | null
+    if (!ok) return { ok: false, error: 'Авторизация не завершена' }
     const data = loadData()
+    // Токена нет — авторизация это сама сессия; пишем маркер подключения
     saveData({
       ...data,
       connections: {
         ...data.connections,
-        vk: { token: auth.token, connectedAt: Date.now(), userId: auth.userId },
+        vk: { token: 'web-session', connectedAt: Date.now() },
       },
     })
-    return { ok: true, userId: auth.userId }
+    return { ok: true }
   })
 
   /** OAuth Last.fm: окно → token → auth.getSession → бессрочная сессия */

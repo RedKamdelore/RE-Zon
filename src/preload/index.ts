@@ -19,7 +19,7 @@ const api = {
   scanLibrary: (folders: string[]): Promise<Track[]> =>
     ipcRenderer.invoke('library:scan', folders),
   demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
-  vkImport: (token: string): Promise<VkImportResult> => ipcRenderer.invoke('vk:import', token),
+  vkImport: (): Promise<VkImportResult> => ipcRenderer.invoke('vk:import'),
   scSearch: (query: string): Promise<ScSearchResult> => ipcRenderer.invoke('sc:search', query),
   scResolveStream: (url: string): Promise<string> => ipcRenderer.invoke('sc:resolveStream', url),
   lastfmCall: (method: string, params: Record<string, string | number>): Promise<LfmCallResult> =>

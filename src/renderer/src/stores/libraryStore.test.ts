@@ -40,8 +40,7 @@ describe('libraryStore.addTracks', () => {
   })
 
   it('appends new tracks and dedupes by id', () => {
-    const t = (id: string): Track => ({
-      id, sourceId: 'vk', title: 'T', artist: 'A', album: 'VK', durationSec: 1, filePath: 'https://x/a.mp3',
+    const t = (id: string): Track => ({      id, sourceId: 'vk', title: 'T', artist: 'A', album: 'VK', durationSec: 1, filePath: 'https://x/a.mp3',
     })
     useLibraryStore.getState().addTracks([t('vk:1'), t('vk:2')])
     expect(useLibraryStore.getState().tracks.map((x) => x.id)).toEqual(['vk:1', 'vk:2'])
@@ -79,6 +78,47 @@ describe('libraryStore.addTracks', () => {
     vi.advanceTimersByTime(500)
     const saved = saveData.mock.calls[0][0] as PersistedData
     expect(saved.importedTracks.map((x) => x.id)).toEqual(['vk:9'])
+  })
+
+  it('upsertTracks refreshes stale urls of existing tracks and adds new', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+    useLibraryStore.setState({
+      tracks: [
+        { id: 'vk:1', sourceId: 'vk', title: 'Old title', artist: 'A', album: 'VK', durationSec: 10, filePath: 'https://stale/1.mp3', lyrics: 'руками вбитый текст' },
+        { id: 'local:x', sourceId: 'local', title: 'L', artist: 'A', album: 'X', durationSec: 1, filePath: 'C:\\a.mp3' },
+      ],
+    })
+    const [updated, added] = useLibraryStore.getState().upsertTracks([
+      { id: 'vk:1', sourceId: 'vk', title: 'Old title', artist: 'A', album: 'VK', durationSec: 10, filePath: 'https://fresh/1.mp3' },
+      { id: 'vk:2', sourceId: 'vk', title: 'New', artist: 'B', album: 'VK', durationSec: 20, filePath: 'https://fresh/2.mp3' },
+    ])
+    expect([updated, added]).toEqual([1, 1])
+    const s = useLibraryStore.getState()
+    // url обновлён у существующего
+    expect(s.tracks.find((t) => t.id === 'vk:1')?.filePath).toBe('https://fresh/1.mp3')
+    // пользовательские правки (текст) не потеряны
+    expect(s.tracks.find((t) => t.id === 'vk:1')?.lyrics).toBe('руками вбитый текст')
+    // новый добавлен
+    expect(s.tracks.find((t) => t.id === 'vk:2')?.title).toBe('New')
+    // порядок: локальные не сдвинуты
+    expect(s.tracks.map((t) => t.id)).toEqual(['vk:1', 'local:x', 'vk:2'])
+    vi.advanceTimersByTime(500)
+    expect(saveData).toHaveBeenCalledTimes(1)
+  })
+
+  it('upsertTracks is a no-op when nothing changed', () => {
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData: vi.fn() } }
+    setPersistedBase(makeBase())
+    useLibraryStore.setState({
+      tracks: [{ id: 'vk:1', sourceId: 'vk', title: 'T', artist: 'A', album: 'VK', durationSec: 1, filePath: 'https://x/1.mp3' }],
+    })
+    const r = useLibraryStore.getState().upsertTracks([
+      { id: 'vk:1', sourceId: 'vk', title: 'T', artist: 'A', album: 'VK', durationSec: 1, filePath: 'https://x/1.mp3' },
+    ])
+    expect(r).toEqual([0, 0])
   })
 })
 

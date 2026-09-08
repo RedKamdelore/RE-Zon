@@ -19,6 +19,7 @@ import { useLyricsStore } from './stores/lyricsStore'
 import { useStatsStore } from './stores/statsStore'
 import { useFavoritesStore } from './stores/favoritesStore'
 import { useConnectionsStore } from './stores/connectionsStore'
+import { vkAutoRefresh } from './vkAutoRefresh'
 import { useNavStore, type View } from './stores/navStore'
 
 export type { View }
@@ -48,7 +49,10 @@ export default function App() {
           usePlayerStore.getState().applyEqPreset(data.eqGains)
           useFavoritesStore.getState().init(data.favoriteIds ?? [])
           void useLibraryStore.getState().init(data)
-          void useConnectionsStore.getState().init() // статусы сервисов (V3-3)
+          void useConnectionsStore.getState().init().then(() => {
+            // Автообновление VK (V3-3b): тихо, после инициализации статусов
+            void vkAutoRefresh()
+          })
         })
         .catch((e) => console.error('loadData failed:', e))
     } else {

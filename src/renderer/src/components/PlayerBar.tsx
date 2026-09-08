@@ -17,6 +17,7 @@ import {
   VolumeIcon,
   MusicNoteIcon,
   HeartIcon,
+  SOURCE_BADGES,
 } from './icons'
 
 export type Panel = 'queue' | 'lyrics' | 'eq' | 'mini'
@@ -71,7 +72,17 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
         {track && (
           <div className="pb-track-info">
             <div className="pb-title">{track.title}</div>
-            <div className="pb-artist">{track.artist}</div>
+            <div className="pb-artist">
+              {track.artist}
+              {SOURCE_BADGES[track.sourceId] && (
+                <span
+                  className={`src-badge src-${track.sourceId}`}
+                  title={SOURCE_BADGES[track.sourceId].title}
+                >
+                  {SOURCE_BADGES[track.sourceId].render(12)}
+                </span>
+              )}
+            </div>
           </div>
         )}
         {track && (

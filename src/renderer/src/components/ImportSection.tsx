@@ -95,12 +95,6 @@ function VkCard() {
   const [busy, setBusy] = useState<string | null>(null) // 'connect' | 'import'
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Ручной токен остаётся как fallback (раскрывается по ссылке)
-  const [manualOpen, setManualOpen] = useState(false)
-  const [manualToken, setManualToken] = useState<string>(() => {
-    const sources = getPersistedBase()?.importSources as { vkToken?: string } | undefined
-    return sources?.vkToken ?? ''
-  })
 
   useEffect(() => {
     setError(null)
@@ -108,7 +102,7 @@ function VkCard() {
   }, [status?.connected])
 
   const connect = async (): Promise<void> => {
-    if (!window.api || busy) return
+    if (!window.api || busy !== null) return
     setBusy('connect')
     setError(null)
     setStatusMsg(null)
@@ -119,7 +113,7 @@ function VkCard() {
         return
       }
       await useConnectionsStore.getState().refresh()
-      setStatusMsg('VK подключён — можно импортировать аудио')
+      setStatusMsg('VK подключён — импортируйте аудио')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -128,40 +122,39 @@ function VkCard() {
   }
 
   const disconnect = async (): Promise<void> => {
-    if (!window.api || busy) return
+    if (!window.api || busy !== null) return
     await useConnectionsStore.getState().disconnect('vk')
     setStatusMsg('VK отключён')
   }
 
-  const doImport = async (): Promise<void> => {
+  const doImport = async (silent = false): Promise<void> => {
     if (!window.api || busy !== null || !status?.connected) return
     setBusy('import')
-    setError(null)
-    setStatusMsg(null)
+    if (!silent) {
+      setError(null)
+      setStatusMsg(null)
+    }
     try {
-      // Токен живёт в persisted base (connections.vk) — не в renderer-сторе
-      const token = getPersistedBase()?.connections?.vk?.token
-      if (!token) {
-        setError('Токен VK не найден — подключите заново')
-        return
-      }
-      const res = await window.api.vkImport(token)
+      const res = await window.api.vkImport()
       if (!res.ok) {
-        setError(res.error)
+        if (!silent) setError(res.error)
+        else console.warn('VK auto-refresh failed:', res.error)
         return
       }
       const playable = res.tracks.filter((t) => t.streamUrl)
       const skipped = res.tracks.length - playable.length
       if (playable.length === 0) {
-        setStatusMsg(
-          res.tracks.length === 0
-            ? 'В VK не найдено аудиозаписей'
-            : `Найдено ${res.tracks.length} ${plural(res.tracks.length, 'трек', 'трека', 'треков')}, но ни у одного нет аудиопотока`,
-        )
+        if (!silent) {
+          setStatusMsg(
+            res.tracks.length === 0
+              ? 'В VK не найдено аудиозаписей'
+              : `Найдено ${res.tracks.length} треков, но ни у одного нет аудиопотока`,
+          )
+        }
         return
       }
-      const tracks: Track[] = playable.map((t, i) => ({
-        id: `vk:${t.extId ?? i}`,
+      const tracks: Track[] = playable.map((t) => ({
+        id: `vk:${t.extId ?? t.title}`,
         sourceId: 'vk',
         title: t.title,
         artist: t.artist,
@@ -169,39 +162,25 @@ function VkCard() {
         durationSec: t.durationSec ?? 0,
         filePath: t.streamUrl!,
       }))
-      useLibraryStore.getState().addTracks(tracks)
+      // Реимпорт: обновляем существующие (протухшие url) + добавляем новые
+      const [updated, added] = useLibraryStore.getState().upsertTracks(tracks)
       const name = upsertServicePlaylist('vk', tracks, () =>
         nextVkPlaylistName(usePlaylistStore.getState().playlists.map((p) => p.name)),
       )
       void window.api.connectionsSetPlaylistName('vk', name)
       void useConnectionsStore.getState().refresh()
-      const playlistId = usePlaylistStore.getState().playlists.find((p) => p.name === name)?.id
-      if (playlistId) useNavStore.getState().setView({ name: 'playlist', id: playlistId })
-      setStatusMsg(
-        `Обновлено «${name}»: ${tracks.length} ${plural(tracks.length, 'трек', 'трека', 'треков')}` +
-          (skipped > 0 ? `, ${skipped} без потока пропущено` : ''),
-      )
+      if (!silent) {
+        const playlistId = usePlaylistStore.getState().playlists.find((p) => p.name === name)?.id
+        if (playlistId) useNavStore.getState().setView({ name: 'playlist', id: playlistId })
+        const parts: string[] = [`«${name}»: ${tracks.length} треков`]
+        if (updated > 0) parts.push(`${updated} обновлено`)
+        if (added > 0) parts.push(`${added} новых`)
+        if (skipped > 0) parts.push(`${skipped} без потока пропущено`)
+        setStatusMsg(parts.join(', '))
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const onManualTokenChange = (value: string): void => {
-    setManualToken(value)
-    const base = getPersistedBase()
-    persistPatch({ importSources: { ...(base?.importSources ?? {}), vkToken: value } })
-  }
-
-  /** Ручной токен из старого поля тоже становится подключением */
-  const applyManualToken = async (): Promise<void> => {
-    if (!window.api || busy !== null || manualToken.trim() === '') return
-    setBusy('connect')
-    try {
-      const view = await window.api.connectionsSave('vk', { token: manualToken.trim() })
-      useConnectionsStore.getState().applyConnected('vk', view)
-      setStatusMsg('Токен сохранён')
+      if (!silent) setError(e instanceof Error ? e.message : String(e))
+      else console.warn('VK auto-refresh failed:', e)
     } finally {
       setBusy(null)
     }
@@ -231,34 +210,10 @@ function VkCard() {
         )}
       </div>
       <p className="muted import-note">
-        Вход через аккаунт VK. Доступ к аудио даёт только неофициальное приложение
-        (Kate Mobile) — небольшой риск блокировки аккаунта. Токен живёт ~24 часа.
+        Вход через сайт ВКонтакте — как в обычном браузере. Сессия сохраняется:
+        повторный вход не нужен, новые песни подгружаются кнопкой «Обновить» и
+        автоматически при запуске Re:Zon.
       </p>
-      <div className="import-fallback">
-        <button className="link-btn" onClick={() => setManualOpen((v) => !v)}>
-          {manualOpen ? 'Скрыть ручной ввод токена' : 'Ввести токен вручную'}
-        </button>
-        {manualOpen && (
-          <>
-            <input
-              type="password"
-              className="settings-input"
-              placeholder="Токен (vkhost.github.io)"
-              value={manualToken}
-              onChange={(e) => onManualTokenChange(e.target.value)}
-            />
-            <div className="import-actions">
-              <button
-                className="btn-outline"
-                disabled={busy !== null || manualToken.trim() === ''}
-                onClick={() => void applyManualToken()}
-              >
-                Сохранить токен
-              </button>
-            </div>
-          </>
-        )}
-      </div>
       {error && <div className="import-status import-error">{error}</div>}
       {statusMsg && <div className="import-status">{statusMsg}</div>}
     </ProviderCard>

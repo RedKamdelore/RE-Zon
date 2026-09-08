@@ -20,6 +20,8 @@ interface LibraryState {
   addFolder: () => Promise<void> // pickFolder → persist musicFolders → rescan
   removeFolder: (folder: string) => Promise<void> // persist без папки → rescan (пусто → демо)
   addTracks: (tracks: Track[]) => void // внешние треки (VK и др.): дописывает, дедуп по id
+  /** VK-реимпорт: обновляет существующие треки (протухшие url) + добавляет новые; возвращает [обновлено, добавлено] */
+  upsertTracks: (tracks: Track[]) => [number, number]
   hideTrack: (id: string) => void // скрыть из библиотеки (исчезает из списков, играющий доигрывает)
   unhideTrack: (id: string) => void // вернуть скрытый трек
 }
@@ -56,6 +58,34 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     // со временем протухают — трек останется в библиотеке, а неудача
     // воспроизведения обрабатывается error-skip в подписках плеера.
     persistPatch({ importedTracks: tracks.filter(isImported) })
+  },
+
+  /**
+   * VK-реимпорт (V3-3b): свежие streamUrl у уже добавленных треков (VK-ссылки
+   * живут часы), плюс новые треки с прошлого импорта. Тексты/обложки
+   * существующих не трогаем — только воспроизводимость. Возвращает счётчики.
+   */
+  upsertTracks: (incoming) => {
+    const byId = new Map(get().tracks.map((t) => [t.id, t]))
+    let updated = 0
+    let added = 0
+    for (const t of incoming) {
+      const existing = byId.get(t.id)
+      if (existing) {
+        if (t.filePath && t.filePath !== existing.filePath) {
+          byId.set(t.id, { ...existing, filePath: t.filePath })
+          updated++
+        }
+      } else {
+        byId.set(t.id, t)
+        added++
+      }
+    }
+    if (updated === 0 && added === 0) return [0, 0]
+    const tracks = [...byId.values()]
+    set({ tracks })
+    persistPatch({ importedTracks: tracks.filter(isImported) })
+    return [updated, added]
   },
 
   init: async (data) => {

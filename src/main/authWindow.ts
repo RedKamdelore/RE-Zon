@@ -4,12 +4,15 @@ import { BrowserWindow, shell } from 'electron'
  * Универсальное окно веб-авторизации для кнопок «Подключить» (V3-3).
  * Открывает URL логина сервиса, ловит redirect, при котором в URL
  * появляется токен/код, и закрывается. Само ничего не парсит —
- * матчер-предикат передаётся вызывающим кодом (VK: fragment
- * access_token=, Spotify: ?code=, Яндекс: cookie/token по политике сервиса).
+ * матчер-предикат передаётся вызывающим кодом.
+ *
+ * partition (V3-3 VK-web): постоянная сессионная коробка (persist:…) —
+ * куки сохраняются на диск и переживают рестарты. Для VK это и есть
+ * авторизация: вошёл один раз как в браузер — сессия живёт месяцами.
  */
 
 export interface AuthWindowOptions {
-  /** Стартовый URL (oauth.vk.com/authorize, accounts.spotify.com/… и т.д.) */
+  /** Стартовый URL (oauth.vk.com/authorize, m.vk.com/audio и т.д.) */
   url: string
   /**
    * Признак успеха: вызывается на каждую навигацию/redirect;
@@ -18,9 +21,11 @@ export interface AuthWindowOptions {
   match: (url: string) => unknown | null
   /** Заголовок окна */
   title?: string
-  /** Ширина/высота (VK/Spotify хватает 720×640) */
+  /** Ширина/высота */
   width?: number
   height?: number
+  /** Постоянная session partition (persist:name) — сессия на диск. */
+  partition?: string
 }
 
 /**
@@ -55,20 +60,19 @@ export function openAuthWindow(
       backgroundColor: '#121212',
       webPreferences: {
         // Авторизационное окно — без preload, только сайт сервиса.
-        // nodeIntegration выключен по умолчанию; sandbox true.
+        // partition: persist-куки на диск (VK-сессия) или изолированная in-memory.
+        partition: opts.partition ?? 'rezon-auth',
         sandbox: true,
       },
     })
 
-    // Стрим URL-изменений VK не всегда даёт did-navigate (fragment!),
-    // поэтому матчим оба события; fragment приходит в url обоих.
     const tryMatch = (url: string): void => {
       const m = opts.match(url)
       if (m !== null) finish(m)
     }
 
     win.webContents.on('did-navigate', (_e, url) => tryMatch(url))
-    win.webContents.on('did-redirect-navigation' as never, (_e: unknown, url: string) => tryMatch(url))
+    win.webContents.on('did-navigate-in-page', (_e, url) => tryMatch(url))
     win.on('closed', () => finish(null))
 
     // Внешние ссылки (помощь сервиса и т.п.) — в системный браузер

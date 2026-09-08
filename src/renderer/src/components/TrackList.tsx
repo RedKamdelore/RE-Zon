@@ -7,7 +7,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { useNavStore } from '../stores/navStore'
 import { fmt } from '../utils/format'
-import { PlayIcon, ClockIcon, MusicNoteIcon, HeartIcon } from './icons'
+import { PlayIcon, ClockIcon, MusicNoteIcon, HeartIcon, SOURCE_BADGES } from './icons'
 
 interface TrackListProps {
   tracks: Track[]
@@ -277,7 +277,17 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
               <span className={`tl-title${t.id === currentTrackId ? ' playing' : ''}`}>
                 {t.title}
               </span>
-              <span className="tl-artist">{t.artist}</span>
+              <span className="tl-artist">
+                {t.artist}
+                {SOURCE_BADGES[t.sourceId] && (
+                  <span
+                    className={`src-badge src-${t.sourceId}`}
+                    title={SOURCE_BADGES[t.sourceId].title}
+                  >
+                    {SOURCE_BADGES[t.sourceId].render(11)}
+                  </span>
+                )}
+              </span>
             </span>
           </span>
           <span className="tl-album">{t.album}</span>
