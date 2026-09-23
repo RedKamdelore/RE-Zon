@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Re:Zon — всё, что звучит по-вашему</title>
+  <desc id="desc">Графитовая обложка с медным логотипом-этикеткой и абстрактной виниловой пластинкой.</desc>
+  <defs>
+    <radialGradient id="glow"><stop stop-color="#D9996F" stop-opacity=".13"/><stop offset="1" stop-color="#D9996F" stop-opacity="0"/></radialGradient>
+    <clipPath id="clip"><rect width="1280" height="640" rx="16"/></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <path fill="#181B1F" d="M0 0h1280v640H0z"/>
+    <circle cx="1070" cy="315" r="430" fill="url(#glow)"/>
+    <g fill="none" stroke="#38332F">
+      <circle cx="1120" cy="320" r="320"/><circle cx="1120" cy="320" r="294"/>
+      <circle cx="1120" cy="320" r="268"/><circle cx="1120" cy="320" r="242"/>
+      <circle cx="1120" cy="320" r="216"/><circle cx="1120" cy="320" r="190"/>
+    </g>
+    <circle cx="1120" cy="320" r="137" fill="#D9996F"/>
+    <circle cx="1120" cy="320" r="107" fill="none" stroke="#181B1F" stroke-opacity=".22"/>
+    <circle cx="1120" cy="320" r="12" fill="#181B1F"/>
+    <path d="M64 64h1152M64 576h1152" stroke="#35383C"/>
+    <rect x="64" y="104" width="90" height="90" rx="4" fill="#20242A" stroke="#D9996F" stroke-width="2"/>
+    <g fill="#F3F0E9" font-family="Arial, sans-serif" font-weight="700">
+      <text x="78" y="146" font-size="32">RE:</text><text x="78" y="176" font-size="26">ZON</text>
+    </g>
+    <g font-family="Arial, sans-serif">
+      <text x="176" y="142" fill="#D9996F" font-size="13" letter-spacing="3">ЛИЧНЫЙ МУЗЫКАЛЬНЫЙ АТЛАС</text>
+      <text x="176" y="168" fill="#9C9F9F" font-size="14">Коллекция · Плеер · Ваше пространство</text>
+      <text x="60" y="313" fill="#F3F0E9" font-size="88" font-weight="700" letter-spacing="-4">Re:Zon</text>
+      <text x="64" y="382" fill="#F3F0E9" font-size="38" font-weight="700">Всё, что звучит</text>
+      <text x="64" y="431" fill="#D9996F" font-size="38" font-weight="700">по-вашему.</text>
+      <text x="64" y="521" fill="#ADB0B1" font-size="16">Собирайте музыку. Возвращайтесь к любимому.</text>
+      <text x="64" y="607" fill="#969A9D" font-size="11" letter-spacing="2">WINDOWS / DESKTOP PLAYER</text>
+      <text x="1216" y="607" text-anchor="end" fill="#D9996F" font-size="11" letter-spacing="2">LISTEN CLOSELY</text>
+    </g>
+  </g>
+</svg>
