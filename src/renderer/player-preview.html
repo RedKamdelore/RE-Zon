@@ -1,0 +1,8 @@
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><title>Re:Zon — Player QA</title></head><body><div id="root"></div><script type="module">
+import { usePlayerStore } from './src/stores/playerStore'
+import { useWorkspaceStore } from './src/stores/workspaceStore'
+const track={id:'qa:karaoke',sourceId:'demo',title:'Тёплый вечер',artist:'Маяк',album:'Линии света',durationSec:187,filePath:'',lyrics:'[00:00.00]Тёплый вечер начинается здесь\n[00:03.00]Город загорается снова\n[00:06.00]Мы находим свет в тишине\n[00:09.00]И музыка ведёт нас дальше\n[00:12.00]К новому дню'}
+usePlayerStore.setState({queue:[track],order:[0],pos:0,currentSec:6,playing:false})
+useWorkspaceStore.setState({fullPlayerOpen:true,fullPlayerMode:'lyrics'})
+await import('./src/main')
+</script></body></html>

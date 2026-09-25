@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Track } from '@shared/types'
 import { upcomingPositions } from '@shared/queue'
 import { usePlayerStore } from '../stores/playerStore'
-import { useLyricsStore, setLyricsOverride } from '../stores/lyricsStore'
+import { useLyricsStore, setLyricsOverride, searchLyrics } from '../stores/lyricsStore'
 import { fmt } from '../utils/format'
 import { CloseIcon, MusicNoteIcon } from './icons'
 import Equalizer from './Equalizer'
@@ -113,6 +113,9 @@ export function LyricsPanel() {
   const currentSec = usePlayerStore((s) => s.currentSec)
   const seek = usePlayerStore((s) => s.seek)
   const overrides = useLyricsStore((s) => s.overrides)
+  const automatic = useLyricsStore((s) => s.automatic)
+  const searching = useLyricsStore((s) => s.searching)
+  const lookupErrors = useLyricsStore((s) => s.errors)
   const drafts = useWorkspaceStore(s=>s.lyricDrafts)
   const [follow, setFollow] = useState(true)
   const [importError, setImportError] = useState('')
@@ -127,9 +130,14 @@ export function LyricsPanel() {
   const setDraft = (value:string) => { if(trackId)useWorkspaceStore.getState().setLyricDraft(trackId,value) }
   const setEditing = (value:boolean) => { if(trackId&&!value)useWorkspaceStore.getState().setLyricDraft(trackId,undefined) }
 
-  const lyrics = track ? overrides[track.id] ?? track.lyrics : undefined
+  const hasOverride = !!trackId && Object.prototype.hasOwnProperty.call(overrides, trackId)
+  const found = trackId ? automatic[trackId] : undefined
+  const lyrics = track ? hasOverride ? overrides[track.id] : found?.synced ? found.text : track.lyrics || found?.text : undefined
   const timed = useMemo(() => parseLrc(lyrics ?? ''), [lyrics])
   const active = activeLyricIndex(timed, currentSec)
+  useEffect(() => {
+    if (track && !hasOverride && !parseLrc(track.lyrics ?? '').length) void searchLyrics(track)
+  }, [trackId, hasOverride])
   useEffect(() => { setFollow(true) }, [trackId])
   useEffect(() => {
     if (!follow || active < 0) return
@@ -190,8 +198,9 @@ export function LyricsPanel() {
   if (!lyrics) {
     return (
       <div className="rp-lyrics-empty">
-        <p className="empty-state">Текст для этого трека не найден</p>
-        <div className="rp-lyrics-actions"><button className="btn-outline" onClick={startEdit}>Добавить текст</button><button className="btn-outline" onClick={() => void importLrc()}>Загрузить LRC…</button></div>
+        <p className="empty-state">{trackId && searching[trackId] ? 'Ищем текст песни…' : 'Текст для этого трека не найден'}</p>
+        <div className="rp-lyrics-actions"><button className="btn-outline" onClick={() => void searchLyrics(track, true)} disabled={!!(trackId && searching[trackId])}>Искать снова</button><button className="btn-outline" onClick={startEdit}>Добавить текст</button><button className="btn-outline" onClick={() => void importLrc()}>Загрузить LRC…</button></div>
+        {trackId && lookupErrors[trackId] && <p role="alert">{lookupErrors[trackId]}</p>}
         {importError && <p role="alert">{importError}</p>}
       </div>
     )
@@ -200,7 +209,7 @@ export function LyricsPanel() {
   return (
     <>
       {timed.length ? <>
-        <div className="rp-lyrics-toolbar"><span className="muted">Текст синхронизирован с треком</span>{!follow && <button className="text-button" onClick={() => setFollow(true)}>К текущей строке</button>}</div>
+        <div className="rp-lyrics-toolbar"><span className="muted">Текст синхронизирован с треком{!hasOverride && found?.synced ? ' · LRCLIB' : ''}</span>{!follow && <button className="text-button" onClick={() => setFollow(true)}>К текущей строке</button>}</div>
         <div ref={scrollRef} className="rp-lyrics-timed" onWheel={() => setFollow(false)} onTouchMove={() => setFollow(false)} aria-label="Синхронный текст песни">
           {timed.map((line, index) => <button
             key={`${line.timeSec}:${index}`}
@@ -208,11 +217,12 @@ export function LyricsPanel() {
             type="button"
             className={'rp-lyrics-line' + (index === active ? ' active' : index < active ? ' passed' : '')}
             aria-current={index === active ? 'true' : undefined}
-            onClick={() => { seek(line.timeSec); setFollow(true) }}
+            onClick={() => seek(line.timeSec)}
             title={`Перейти к ${Math.floor(line.timeSec / 60)}:${String(Math.floor(line.timeSec % 60)).padStart(2, '0')}`}
           >{line.text || '♪'}</button>)}
         </div>
       </> : <pre className="rp-lyrics-text">{lyrics}</pre>}
+      {!hasOverride && !found?.synced && <button className="btn-outline" onClick={() => void searchLyrics(track, true)} disabled={!!(trackId && searching[trackId])}>{trackId && searching[trackId] ? 'Поиск…' : 'Найти синхронный текст'}</button>}
       <button className="btn-outline" onClick={startEdit}>
         Изменить текст
       </button>

@@ -15,8 +15,8 @@ export default function ListeningContext({ onMini }: { onMini: () => void }) {
     return () => { window.removeEventListener('keydown', key); previous?.focus() }
   }, [closeSession])
   return <aside className="listening-context material-surface" aria-label="Сеанс прослушивания">
-    <header className="session-heading"><span className="eyebrow"><AtlasIcon name="wave" size={16}/> СЕАНС</span><div><button className={'icon-btn pin-session'+(pinned?' active':'')} aria-label="Закрепить сеанс" aria-pressed={pinned} title="Закрепить рядом с коллекцией" onClick={pinSession}><AtlasIcon name="pin" size={18}/></button><button ref={closeRef} className="icon-btn" aria-label="Закрыть сеанс" onClick={closeSession}>×</button></div></header>
-    <PlayerBar onTogglePanel={p => p === 'mini' ? onMini() : setSessionTab(p)}/>
+    <header className="session-heading"><span className="eyebrow"><AtlasIcon name="wave" size={16}/> СЕАНС</span><div><button className="icon-btn" aria-label="Открыть большой плеер" title="Большой плеер" onClick={() => useWorkspaceStore.getState().openFullPlayer()}>⤢</button><button className={'icon-btn pin-session'+(pinned?' active':'')} aria-label="Закрепить сеанс" aria-pressed={pinned} title="Закрепить рядом с коллекцией" onClick={pinSession}><AtlasIcon name="pin" size={18}/></button><button ref={closeRef} className="icon-btn" aria-label="Закрыть сеанс" onClick={closeSession}>×</button></div></header>
+    <PlayerBar onTogglePanel={p => p === 'mini' ? onMini() : setSessionTab(p)} onExpand={() => useWorkspaceStore.getState().openFullPlayer()}/>
     <div className="session-tabs" role="tablist" aria-label="Разделы сеанса">{(['queue','lyrics','eq'] as const).map((tab,i) => <button key={tab} id={'session-tab-'+tab} role="tab" aria-selected={sessionTab===tab} aria-controls="session-content" className={sessionTab===tab?'active':''} onClick={() => setSessionTab(tab)}>{['Очередь','Текст','Звук'][i]}</button>)}</div>
     <div className="session-content" id="session-content" role="tabpanel" aria-labelledby={'session-tab-'+sessionTab}>{sessionTab==='queue'?<QueuePanel/>:sessionTab==='lyrics'?<LyricsPanel/>:<Equalizer/>}</div>
   </aside>

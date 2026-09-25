@@ -5,6 +5,7 @@ import './styles/global.css'
 import './styles/shell.css'
 import './styles/components.css'
 import './styles/pages.css'
+import './styles/fullPlayer.css'
 import { applyTheme, DEFAULT_APPEARANCE } from './theme'
 
 applyTheme(DEFAULT_APPEARANCE.theme)

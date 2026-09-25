@@ -15,16 +15,18 @@ import CollectionView from './components/CollectionView'
 import RadioView from './components/RadioView'
 import FavoritesView from './components/FavoritesView'
 import MiniPlayer from './components/MiniPlayer'
+import FullPlayer from './components/FullPlayer'
 import { useHotkeys } from './hotkeys'
 import { usePlayerStore, initPlayerSubscriptions, getPlayerEngine } from './stores/playerStore'
 import { useLibraryStore, visibleTracks } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
-import { useLyricsStore } from './stores/lyricsStore'
+import { useLyricsStore, searchLyrics } from './stores/lyricsStore'
 import { useStatsStore } from './stores/statsStore'
 import { useFavoritesStore } from './stores/favoritesStore'
 import { useConnectionsStore } from './stores/connectionsStore'
 import { useAccountsStore } from './stores/accountsStore'
+import { parseLrc } from '@shared/lyrics'
 
 import ServiceCollection from './components/ServiceCollection'
 import { useNavStore, type View } from './stores/navStore'
@@ -34,13 +36,18 @@ export type { View }
 export default function App() {
   const view = useNavStore((s) => s.view)
   const mainRef=useRef<HTMLElement>(null)
+  const savedScroll=useRef(0)
+  const wasFullPlayer=useRef(false)
   useEffect(()=>{if(mainRef.current)mainRef.current.scrollTop=0},[view])
   const setView = useNavStore((s) => s.setView)
   const playlists = usePlaylistStore((s) => s.playlists)
   const tracks = useLibraryStore(visibleTracks)
+  const currentTrack = usePlayerStore(s => s.queue[s.order[s.pos]])
   const lastHiddenIds = useLibraryStore((s) => s.lastHiddenIds)
 
   useHotkeys() // глобальные горячие клавиши (V3-4)
+
+  useEffect(() => { if (currentTrack && !parseLrc(currentTrack.lyrics ?? '').length) void searchLyrics(currentTrack) }, [currentTrack?.id])
 
   useEffect(() => {
     const unsubscribe = initPlayerSubscriptions()
@@ -86,9 +93,16 @@ export default function App() {
   // Правая панель: очередь / текст / эквалайзер (Task 12–13);
   // повторный клик по активной кнопке закрывает панель, 'mini' — мини-плеер
   const sessionOpen = useWorkspaceStore(s => s.sessionOpen)
+  const fullPlayerOpen = useWorkspaceStore(s => s.fullPlayerOpen)
   const pinned = useWorkspaceStore(s => s.pinned)
   const searchOpen = useWorkspaceStore(s => s.searchOpen)
   const [mini, setMini] = useState(false)
+
+  useEffect(() => {
+    if (fullPlayerOpen && !wasFullPlayer.current) savedScroll.current = mainRef.current?.scrollTop ?? 0
+    if (!fullPlayerOpen && wasFullPlayer.current) requestAnimationFrame(() => { if (mainRef.current) mainRef.current.scrollTop = savedScroll.current })
+    wasFullPlayer.current = fullPlayerOpen
+  }, [fullPlayerOpen])
 
 
   const setMiniMode = async (value: boolean): Promise<void> => {
@@ -106,6 +120,7 @@ export default function App() {
       if (cmd === 'toggle') p.togglePlay()
       if (cmd === 'next') p.next({ manual: true })
       if (cmd === 'prev') p.prev()
+      if (cmd === 'expand') useWorkspaceStore.getState().openFullPlayer()
       if (cmd.startsWith('seek:')) { const sec = Number(cmd.slice(5)); if (Number.isFinite(sec)) p.seek(sec) }
     })
   }, [])
@@ -131,17 +146,18 @@ export default function App() {
   if (mini) {
     return (
       <div className="app mini">
-        <MiniPlayer onExpand={() => void setMiniMode(false)} />
+        <MiniPlayer onExpand={() => { void setMiniMode(false); useWorkspaceStore.getState().openFullPlayer() }} />
       </div>
     )
   }
 
   return (
-    <div className={`app${sessionOpen ? ' session-open' : ''}${pinned ? ' session-pinned' : ''}`}>
+    <div className={`app${sessionOpen && !fullPlayerOpen ? ' session-open' : ''}${pinned && !fullPlayerOpen ? ' session-pinned' : ''}`}>
       <Sidebar view={view} onNavigate={setView} />
       <CommandBar />
       <UpdateNotice />
-      <main className="main" ref={mainRef}>
+      <main className={'main' + (fullPlayerOpen ? ' main-full-player' : '')} ref={mainRef}>
+        {fullPlayerOpen ? <FullPlayer onMini={() => void setMiniMode(true)} /> : <>
         {lastHiddenIds.length > 0 && <div className="tl-bulk-notice" role="status">
           Убрано из библиотеки: {lastHiddenIds.length}. Файлы сохранены.
           <button className="btn-outline" onClick={() => useLibraryStore.getState().unhideTracks(lastHiddenIds)}>Отменить удаление</button>
@@ -163,8 +179,9 @@ export default function App() {
         {view.name === 'artist' && <CollectionView kind="artist" name={view.artist} />}
         {view.name === 'album' && <CollectionView key={view.albumKey ?? `${view.album}:${view.artist ?? ""}`} kind="album" name={view.album} artist={view.artist} albumKey={view.albumKey} />}
         {view.name === 'radio' && <RadioView trackId={view.trackId} />}
+        </>}
       </main>
-      {sessionOpen && <ListeningContext onMini={() => void setMiniMode(true)} />}
+      {sessionOpen && !fullPlayerOpen && <ListeningContext onMini={() => void setMiniMode(true)} />}
       {searchOpen && <SearchPalette />}
     </div>
   )

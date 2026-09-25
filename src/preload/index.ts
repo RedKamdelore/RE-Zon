@@ -31,6 +31,7 @@ const api = {
   },
   resetProfile: (): Promise<boolean> => ipcRenderer.invoke('profile:reset'),
   pickLrc: (): Promise<string | null> => ipcRenderer.invoke('lyrics:pickLrc'),
+  lookupLyrics: (request: import('../shared/lyricsLookup').LyricsLookupRequest): Promise<import('../shared/lyricsLookup').LyricsLookupResult | null> => ipcRenderer.invoke('lyrics:lookup', request),
   updatesState: (): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:state'),
   updatesPreferences: (patch: Partial<import('../shared/updates').UpdatePreferences>): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:preferences', patch),
   updatesCheck: (): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:check'),

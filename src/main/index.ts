@@ -22,9 +22,8 @@ protocol.registerSchemesAsPrivileged([
 
 const ALLOWED_MEDIA_EXT = new Set(['.mp3', '.flac', '.ogg', '.wav', '.m4a', '.opus'])
 
-// Фиксируем userData на rezon независимо от productName сборки,
-// чтобы dev- и packaged-версии делили одни и те же данные.
-app.setPath('userData', join(app.getPath('appData'), 'rezon'))
+// Разработка использует отдельный профиль, чтобы не трогать данные установленной версии.
+app.setPath('userData', join(app.getPath('appData'), process.env.ELECTRON_RENDERER_URL ? 'rezon-dev' : 'rezon'))
 
 function decodeMediaUrl(url: string): string {
   return Buffer.from(url.slice('media://'.length), 'base64url').toString('utf-8')
@@ -101,7 +100,7 @@ if (profileReady) app.whenReady().then(() => {
       return new Response('Not found', { status: 404 })
     }
   })
-  trayPopup = new TrayPopup(() => mainWindow.show(), command => mainWindow.send(command), () => mainWindow.current())
+  trayPopup = new TrayPopup(() => { mainWindow.show(); mainWindow.send('expand') }, command => mainWindow.send(command), () => mainWindow.current())
   mainWindow.ensure()
   registerIpc(() => mainWindow.ensure())
   registerOfflineDownloads()

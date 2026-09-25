@@ -25,13 +25,14 @@ export type Panel = 'queue' | 'lyrics' | 'eq' | 'mini'
 
 interface PlayerBarProps {
   onTogglePanel: (panel: Panel) => void
+  onExpand?: () => void
 }
 
 /** Процент заполнения слайдера → CSS-переменная для градиента трека */
 const progressStyle = (value: number, max: number): CSSProperties =>
   ({ '--progress': `${max > 0 ? Math.min(100, (value / max) * 100) : 0}%` }) as CSSProperties
 
-export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
+export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
   const queue = usePlayerStore((s) => s.queue)
   const order = usePlayerStore((s) => s.order)
   const pos = usePlayerStore((s) => s.pos)
@@ -63,12 +64,12 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
   return (
     <section className="playerbar" aria-label="Управление воспроизведением">
       <div className="pb-left">
-        <div className="pb-cover">
+        <div className="pb-cover" onClick={onExpand} role={onExpand ? 'button' : undefined} tabIndex={onExpand ? 0 : undefined} aria-label={onExpand ? 'Открыть большой плеер' : undefined} onKeyDown={onExpand ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand() } } : undefined}>
           {track ? <Artwork src={track.coverDataUrl} artist={track.artist} album={track.album}/> : <MusicNoteIcon size={24}/> }
         </div>
         {!track && <div className="pb-track-info"><div className="pb-title">Здесь начинается музыка</div><div className="pb-artist">Выберите запись в коллекции</div></div>}
         {track && (
-          <div className="pb-track-info">
+          <div className="pb-track-info" onClick={onExpand}>
             <div className="pb-title">{track.title}</div>
             <div className="pb-artist">
               {track.artist}
