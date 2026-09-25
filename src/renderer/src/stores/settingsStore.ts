@@ -88,7 +88,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => {
       delete customThemes[name]
       // Удалили активную тему — откат на дефолтный пресет
       if (appearance.skin === name) {
-        commitAppearance({ ...appearance, skin: 'spotify-dark', theme: defaultTheme(), customThemes })
+        commitAppearance({ ...appearance, skin: 'atlas', theme: defaultTheme(), customThemes })
       } else {
         commitAppearance({ ...appearance, customThemes })
       }

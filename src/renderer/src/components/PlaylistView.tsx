@@ -4,6 +4,9 @@ import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
 import { plural } from '../utils/plural'
 import TrackList from './TrackList'
+import Artwork from './Artwork'
+import { useNavStore } from '../stores/navStore'
+import { fmt } from '../utils/format'
 import { PlayIcon, MusicNoteIcon } from './icons'
 
 interface PlaylistViewProps {
@@ -30,11 +33,7 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
     <>
       <div className="pl-header">
         <div className="pl-cover">
-          {playlist.coverDataUrl ? (
-            <img src={playlist.coverDataUrl} alt="" />
-          ) : (
-            <MusicNoteIcon size={64} />
-          )}
+          <Artwork src={playlist.coverDataUrl} artist="Плейлист" album={playlist.name}/>
         </div>
         <div className="pl-header-text">
           <div className="pl-label">ПЛЕЙЛИСТ</div>
@@ -48,31 +47,22 @@ export default function PlaylistView({ playlist, tracks }: PlaylistViewProps) {
               onCancel={() => setRenaming(false)}
             />
           ) : (
-            <div
-              className="pl-name editable"
-              title="Нажмите, чтобы переименовать"
-              onClick={() => setRenaming(true)}
-            >
+            <h1 className="pl-name">
               {playlist.name}
-            </div>
+            </h1>
           )}
           <div className="pl-meta">
-            {resolved.length} {plural(resolved.length, 'трек', 'трека', 'треков')}
+            {resolved.length} {plural(resolved.length, 'трек', 'трека', 'треков')} · {fmt(resolved.reduce((sum,t)=>sum+t.durationSec,0))}
+            {playlist.trackIds.length>resolved.length && <p>{playlist.trackIds.length-resolved.length} записей сейчас недоступны</p>}
           </div>
+          <div className="entity-actions"><button className="btn-primary" disabled={!resolved.length} onClick={()=>usePlayerStore.getState().playTracks(resolved,0)}><PlayIcon size={17}/>Слушать</button><button className="btn-outline" onClick={()=>setRenaming(true)}>Переименовать</button><button className="btn-outline" onClick={()=>void window.api?.pickCoverImage().then(cover=>{if(cover)usePlaylistStore.getState().setCover(playlist.id,cover)})}>Обложка</button><button className="text-button" onClick={()=>useNavStore.getState().setView({name:'library',section:'songs'})}>Добавить записи ↗</button><button className="text-button danger" onClick={()=>{if(window.confirm('Удалить плейлист «'+playlist.name+'»?')){usePlaylistStore.getState().remove(playlist.id);useNavStore.getState().setView({name:'library',section:'playlists'})}}}>Удалить</button></div>
         </div>
       </div>
-      <button
-        className="pl-play"
-        title="Слушать"
-        disabled={resolved.length === 0}
-        onClick={() => usePlayerStore.getState().playTracks(resolved, 0)}
-      >
-        <PlayIcon size={24} />
-      </button>
       {resolved.length === 0 ? (
         <p className="muted">В этом плейлисте пока нет треков</p>
       ) : (
-        <TrackList tracks={resolved} onRemoveTrack={removeAt} />
+        <TrackList tracks={resolved} onRemoveTrack={removeAt} onMoveTrack={(id,offset)=>usePlaylistStore.getState().moveTrack(playlist.id,id,offset)}
+          onRemoveTracks={(ids) => usePlaylistStore.getState().removeTracks(playlist.id, ids)} />
       )}    </>
   )
 }

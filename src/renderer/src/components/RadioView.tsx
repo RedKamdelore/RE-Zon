@@ -8,7 +8,7 @@ import { useStatsStore } from '../stores/statsStore'
 import { useNavStore } from '../stores/navStore'
 import { fetchSimilar, type SimilarTrack } from '../lastfm'
 import TrackList from './TrackList'
-import { MusicNoteIcon } from './icons'
+import Artwork from './Artwork'
 
 /** Точное совпадение «название + исполнитель» (регистронезависимо) в библиотеке */
 function findInLibrary(library: Track[], s: SimilarTrack): Track | undefined {
@@ -78,9 +78,9 @@ function LastfmSection({ seed }: { seed: Track }) {
                 <span className="tl-artist">{s.artist}</span>
               </span>
             </span>
-            <span className="tl-album">{Math.round(s.match * 100)}%</span>
+            <span className="tl-album" title="Сходство по данным Last.fm">{Math.round(s.match * 100)}%</span>
             <span className="tl-duration muted">
-              {local ? '' : 'нет в библиотеке'}
+              {local ? '' : <button className="btn-outline" onClick={()=>setView({name:'search',query:s.artist+' '+s.name})}>Найти аудио</button>}
             </span>
           </div>
         )
@@ -113,11 +113,11 @@ export default function RadioView({ trackId }: { trackId: string }) {
     <>
       <div className="pl-header">
         <div className="pl-cover">
-          {seed.coverDataUrl ? <img src={seed.coverDataUrl} alt="" /> : <MusicNoteIcon size={64} />}
+          <Artwork src={seed.coverDataUrl} artist={seed.artist} album={seed.album} />
         </div>
         <div className="pl-header-text">
           <div className="pl-label">РАДИО ПО ТРЕКУ</div>
-          <div className="pl-name">{seed.title}</div>
+          <h1 className="pl-name">{seed.title}</h1>
           <div className="pl-meta">{seed.artist}</div>
         </div>
       </div>

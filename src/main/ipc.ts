@@ -3,9 +3,12 @@ import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
 import { loadData, saveData } from './persistence'
 import { scanFolders, demoTracks } from './library'
-import { fetchVkAudioListWith, matchVkWebAuthUrl, VK_PARTITION, type VkWebFetcher } from './vkWeb'
+import { hasVkSessionCookie, matchVkWebAuthUrl, VK_PARTITION } from './vkWeb'
 import { session as electronSession } from 'electron'
-import { scSearch, scResolveStream } from './soundcloud'
+import { importVkBrowser, prepareVkSession } from './vkBrowser'
+import { registerAccountIpc } from './accounts'
+import { findAlbumCover } from './artwork'
+import { scSearchPage, scResolveStream } from './soundcloud'
 import { lastfmApi, lfmAuthUrl, matchLfmAuthUrl, lfmGetSession, lfmScrobble, type ScrobblePayload } from './lastfm'
 import { openAuthWindow } from './authWindow'
 import {
@@ -15,6 +18,7 @@ import {
   spExchange,
   spRefresh,
   spPlaylists,
+  matchSpotifyCallback,
   spPlaylistTracks,
 } from './spotify'
 import { yaAuthUrl, matchYaAuthUrl, yaExchange, yaRefresh, yaLikes, type YaLikeTrack } from './yandex'
@@ -34,11 +38,16 @@ const DEMO_DIR = app.isPackaged
   ? join(process.resourcesPath, 'demo')
   : join(__dirname, '../../resources/demo')
 
-export function registerIpc(win: BrowserWindow): void {
+export function registerIpc(getWindow: () => BrowserWindow): void {
+  registerAccountIpc(getWindow)
+  ipcMain.handle('artwork:album',(_e,artist:string,album:string)=>findAlbumCover(artist,album))
   ipcMain.handle('data:load', () => loadData())
-  ipcMain.handle('data:save', (_e, data: PersistedData) => saveData(data))
+  ipcMain.handle('data:save', (_e, data: PersistedData) => {
+    const current = loadData()
+    saveData({...data,connections:current.connections,serviceAccounts:current.serviceAccounts,accountLibraries:current.accountLibraries})
+  })
   ipcMain.handle('library:pickFolder', async () => {
-    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+    const r = await dialog.showOpenDialog(getWindow(), { properties: ['openDirectory'] })
     return r.canceled ? null : r.filePaths[0]
   })
   ipcMain.handle('library:scan', (_e, folders: string[]) => scanFolders(folders))
@@ -50,37 +59,15 @@ export function registerIpc(win: BrowserWindow): void {
    */
   ipcMain.handle('vk:import', async (): Promise<VkImportResult> => {
     try {
-      const ses = electronSession.fromPartition(VK_PARTITION)
-      const fetcher: VkWebFetcher = async (url) => {
-        const res = await ses.fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } })
-        return { status: res.status, html: await res.text() }
-      }
-      let lastHtml = ''
-      const { tracks, unauthorized } = await fetchVkAudioListWith(fetcher, {
-        onPage: (html) => {
-          lastHtml = html
-        },
-      })
-      if (unauthorized) {
-        return { ok: false, error: 'Сессия истекла — нажмите «Подключить VK» и войдите заново' }
-      }
-      if (tracks.length === 0 && lastHtml) {
-        // Разведка: вёрстка могла измениться — дамп для отладки парсера
-        const dumpPath = join(app.getPath('userData'), 'vk-audio-dump.html')
-        await import('fs/promises').then((fs) => fs.writeFile(dumpPath, lastHtml, 'utf-8'))
-        return {
-          ok: false,
-          error: `Не удалось разобрать страницу аудиозаписей. Дамп сохранён: ${dumpPath}`,
-        }
-      }
+      const tracks = await importVkBrowser()
       return { ok: true, tracks }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
   })
-  ipcMain.handle('sc:search', async (_e, query: string): Promise<ScSearchResult> => {
+  ipcMain.handle('sc:search', async (_e, query: string, cursor?: string): Promise<ScSearchResult> => {
     try {
-      return { ok: true, tracks: await scSearch(query) }
+      return { ok: true, ...await scSearchPage(query,cursor) }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
@@ -100,7 +87,7 @@ export function registerIpc(win: BrowserWindow): void {
   // Transcoding API URL → финальный mp3-поток (резолвится при воспроизведении)
   ipcMain.handle('sc:resolveStream', (_e, url: string): Promise<string> => scResolveStream(url))
   ipcMain.handle('playlist:pickCover', async () => {
-    const r = await dialog.showOpenDialog(win, {
+    const r = await dialog.showOpenDialog(getWindow(), {
       properties: ['openFile'],
       filters: [{ name: 'Изображения', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
     })
@@ -111,11 +98,23 @@ export function registerIpc(win: BrowserWindow): void {
     const buf = await readFile(file)
     return `data:${mime};base64,${buf.toString('base64')}`
   })
+  ipcMain.handle('lyrics:pickLrc', async () => {
+    const result = await dialog.showOpenDialog(getWindow(), {
+      properties: ['openFile'], filters: [{ name: 'Синхронный текст LRC', extensions: ['lrc'] }],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    const data = await readFile(result.filePaths[0])
+    if (data.length > 1024 * 1024) throw new Error('Файл текста больше 1 МБ.')
+    return data.toString('utf8').replace(/^\uFEFF/, '')
+  })
   ipcMain.handle('window:mini', (_e, mini: boolean) => {
-    if (mini) { win.setAlwaysOnTop(true); win.setMinimumSize(360, 120); win.setSize(360, 140) }
+    const win = getWindow()
+    if (mini) { win.setAlwaysOnTop(true); win.setMinimumSize(320, 320); win.setSize(340, 340) }
     else { win.setAlwaysOnTop(false); win.setMinimumSize(940, 600); win.setSize(1280, 800) }
   })
-  ipcMain.on('player:cmd', (_e, cmd: string) => win.webContents.send('player:cmd', cmd))
+  ipcMain.on('player:cmd', (event, cmd: string) => {
+    if (!event.sender.isDestroyed()) event.sender.send('player:cmd', cmd)
+  })
   ipcMain.on('shell:showItemInFolder', (_e, p: string) => shell.showItemInFolder(p))
 
   // --- Подключения сервисов (V3-3) ------------------------------------------
@@ -137,7 +136,7 @@ export function registerIpc(win: BrowserWindow): void {
       const data = loadData()
       const connections = {
         ...data.connections,
-        [id]: { token: conn.token, connectedAt: Date.now(), userId: conn.userId, refreshToken: conn.refreshToken },
+        [id]: { ...data.connections[id], token: conn.token.trim(), connectedAt: Date.now(), userId: conn.userId, refreshToken: conn.refreshToken },
       }
       saveData({ ...data, connections })
       return connectionStatus(connections, id)
@@ -176,20 +175,28 @@ export function registerIpc(win: BrowserWindow): void {
    * повторный вход не нужен месяцами. Матч: URL вернулся на /audio.
    */
   ipcMain.handle('connect:vk', async (): Promise<{ ok: boolean; error?: string }> => {
-    const ok = (await openAuthWindow(win, {
-      url: 'https://m.vk.com/audio',
+    prepareVkSession()
+    const ok = (await openAuthWindow(getWindow(), {
+      url: 'https://vk.ru/audio',
       title: 'Вход ВКонтакте',
       partition: VK_PARTITION,
       match: (url) => (matchVkWebAuthUrl(url) ? true : null),
+      validateMatch: async () => hasVkSessionCookie(await electronSession.fromPartition(VK_PARTITION).cookies.get({})),
     })) as boolean | null
-    if (!ok) return { ok: false, error: 'Авторизация не завершена' }
+    // Окно могло закрыться вручную до редиректа на /feed — но если
+    // сессионная кука уже в persist:vk, вход всё равно состоялся.
+    if (!ok) {
+      const ses = electronSession.fromPartition(VK_PARTITION)
+      const hasSession = hasVkSessionCookie(await ses.cookies.get({}))
+      if (!hasSession) return { ok: false, error: 'Авторизация не завершена' }
+    }
     const data = loadData()
     // Токена нет — авторизация это сама сессия; пишем маркер подключения
     saveData({
       ...data,
       connections: {
         ...data.connections,
-        vk: { token: 'web-session', connectedAt: Date.now() },
+        vk: { ...data.connections.vk, token: 'web-session', connectedAt: Date.now() },
       },
     })
     return { ok: true }
@@ -200,7 +207,7 @@ export function registerIpc(win: BrowserWindow): void {
     const data = loadData()
     const apiKey = data.lastfmApiKey
     if (!apiKey) return { ok: false, error: 'Сначала введите API key в полях ниже' }
-    const token = (await openAuthWindow(win, {
+    const token = (await openAuthWindow(getWindow(), {
       url: lfmAuthUrl(apiKey),
       title: 'Вход Last.fm',
       width: 480,
@@ -265,7 +272,12 @@ export function registerIpc(win: BrowserWindow): void {
     const codePromise = new Promise<string>((resolve, reject) => {
       const srv = createServer((req, res) => {
         const url = `http://127.0.0.1:8888${req.url ?? '/'}`
-        const m = url.includes('code=') ? new URLSearchParams(url.split('?')[1]).get('code') : null
+        const m = matchSpotifyCallback(url, state)?.code
+        if (!m) {
+          res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+          res.end('Не удалось подтвердить вход Spotify. Вернитесь в приложение.')
+          return
+        }
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
         res.end('<h3>Re:Zon — Spotify подключён. Можно закрыть это окно.</h3>')
         if (m) {
@@ -285,7 +297,7 @@ export function registerIpc(win: BrowserWindow): void {
 
     // Окно авторизации: любой уход с accounts.spotify.com нас не интересует —
     // код придёт на callback-сервер. Окно закрываем по resolve.
-    const windowPromise = openAuthWindow(win, {
+    const windowPromise = openAuthWindow(getWindow(), {
       url: spAuthUrl(clientId, spPkceChallenge(verifier), state),
       title: 'Вход Spotify',
       width: 480,
@@ -360,7 +372,7 @@ export function registerIpc(win: BrowserWindow): void {
 
   /** OAuth Яндекс ID: окно → код → токены. Лайки импортируются отдельно. */
   ipcMain.handle('connect:yandex', async (): Promise<{ ok: boolean; error?: string }> => {
-    const code = (await openAuthWindow(win, {
+    const code = (await openAuthWindow(getWindow(), {
       url: yaAuthUrl(),
       title: 'Вход Яндекс ID',
       width: 480,
@@ -394,13 +406,14 @@ export function registerIpc(win: BrowserWindow): void {
   > => {
     const data = loadData()
     const conn = data.connections.yandex
-    if (!conn?.refreshToken) return { ok: false, error: 'Яндекс Музыка не подключён' }
+    if (!conn?.token) return { ok: false, error: 'Яндекс Музыка не подключён' }
     try {
       // access-токен живёт ~1 год, но подстрахуемся refresh-ом при 401
       let likes: YaLikeTrack[]
       try {
         likes = await yaLikes(conn.token)
-      } catch {
+      } catch (error) {
+        if (!conn.refreshToken || !(error instanceof Error) || !error.message.includes('сессия истекла')) throw error
         const tokens = await yaRefresh(conn.refreshToken)
         saveData({
           ...data,

@@ -103,8 +103,8 @@ describe('libraryStore.addTracks', () => {
     expect(s.tracks.find((t) => t.id === 'vk:1')?.lyrics).toBe('руками вбитый текст')
     // новый добавлен
     expect(s.tracks.find((t) => t.id === 'vk:2')?.title).toBe('New')
-    // порядок: локальные не сдвинуты
-    expect(s.tracks.map((t) => t.id)).toEqual(['vk:1', 'local:x', 'vk:2'])
+    // новые впереди; относительный порядок прежних треков сохранён
+    expect(s.tracks.map((t) => t.id)).toEqual(['vk:2', 'vk:1', 'local:x'])
     vi.advanceTimersByTime(500)
     expect(saveData).toHaveBeenCalledTimes(1)
   })
@@ -332,4 +332,26 @@ describe('libraryStore hidden tracks', () => {
     expect(useLibraryStore.getState().hiddenIds).toEqual(['local:b'])
     expect(visibleTracks(useLibraryStore.getState()).map((x) => x.id)).toEqual(['local:a'])
   })
+})
+
+it('enriches a placeholder album while preserving custom metadata',()=>{
+ setPersistedBase(null)
+ const old:Track={id:'vk:album-test',sourceId:'vk',title:'Song',artist:'Artist',album:'vk',durationSec:10,filePath:'https://example.com/a',lyrics:'Custom lyrics'}
+ useLibraryStore.setState({tracks:[old]})
+ useLibraryStore.getState().upsertTracks([{...old,album:'Actual album',lyrics:undefined}])
+ expect(useLibraryStore.getState().tracks[0].album).toBe('Actual album')
+ expect(useLibraryStore.getState().tracks[0].lyrics).toBe('Custom lyrics')
+})
+
+it('keeps imported tracks when local folders are rescanned or removed',async()=>{
+ const imported:Track={id:'vk:keep',sourceId:'vk',title:'Keep',artist:'A',album:'X',durationSec:30,filePath:'https://example.com/keep'}
+ const local:Track={...imported,id:'local:old',sourceId:'local'}
+ vi.stubGlobal('window',{api:{saveData:vi.fn().mockResolvedValue(undefined),pickFolder:vi.fn().mockResolvedValue('D:/New'),scanLibrary:vi.fn().mockResolvedValue([]),demoLibrary:vi.fn().mockResolvedValue([])}})
+ setPersistedBase(makeBase({musicFolders:[]}));useLibraryStore.setState({tracks:[local,imported]})
+ try {
+  await useLibraryStore.getState().addFolder()
+  expect(useLibraryStore.getState().tracks.map(t=>t.id)).toEqual(['vk:keep'])
+  await useLibraryStore.getState().removeFolder('D:/New')
+  expect(useLibraryStore.getState().tracks.map(t=>t.id)).toEqual(['vk:keep'])
+ }finally{vi.unstubAllGlobals();setPersistedBase(null)}
 })

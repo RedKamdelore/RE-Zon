@@ -91,3 +91,12 @@ describe('enqueueScrobble + flushScrobbles', () => {
     expect(scrobble.mock.calls[1][0]).toHaveLength(1)
   })
 })
+
+it('retains a batch when IPC returns an API error instead of rejecting',async()=>{
+ resetScrobblerState()
+ const send=vi.fn().mockResolvedValueOnce({ok:false,error:'Unavailable'}).mockResolvedValue({ok:true,count:1})
+ vi.stubGlobal('window',{api:{lastfmScrobble:send}})
+ useConnectionsStore.setState({statuses:{lastfm:{connected:true}}})
+ try{enqueueScrobble(track(100,'retry-api'));await flushScrobbles();await flushScrobbles();expect(send).toHaveBeenCalledTimes(2);expect(send.mock.calls[1][0]).toEqual(send.mock.calls[0][0])}
+ finally{resetScrobblerState();vi.unstubAllGlobals()}
+})

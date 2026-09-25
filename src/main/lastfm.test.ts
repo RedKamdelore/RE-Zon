@@ -116,7 +116,7 @@ describe('lfmGetSessionWith', () => {
     expect(url).toContain('token=TOKEN')
     expect(url).toContain('api_key=KEY')
     expect(url).toContain('format=json')
-    expect(url).toMatch(/signature=[0-9a-f]{32}/)
+    expect(url).toMatch(/api_sig=[0-9a-f]{32}/)
   })
 
   it('returns session key and username', async () => {
@@ -171,7 +171,7 @@ describe('lfmScrobbleWith', () => {
     expect(body).toContain('timestamp%5B0%5D=1700000000')
     expect(body).toContain('api_key=KEY')
     expect(body).toContain('sk=SK')
-    expect(body).toMatch(/signature=[0-9a-f]{32}/)
+    expect(body).toMatch(/api_sig=[0-9a-f]{32}/)
   })
 
   it('returns the number of scrobbled tracks', async () => {
@@ -221,7 +221,7 @@ describe('lfmScrobbleWith', () => {
 
 describe('lfm auth url', () => {
   it('lfmAuthUrl embeds the api key', () => {
-    expect(lfmAuthUrl('my key')).toBe('https://www.last.fm/api/auth?api_key=my%20key')
+    expect(lfmAuthUrl('my key')).toBe('https://www.last.fm/api/auth/?api_key=my%20key&cb=http%3A%2F%2F127.0.0.1%3A8889%2Flastfm%2Fcallback')
   })
 
   it('matchLfmAuthUrl extracts token from auth callback (http and https)', () => {
@@ -233,5 +233,13 @@ describe('lfm auth url', () => {
     expect(matchLfmAuthUrl('https://www.last.fm/music/Кино')).toBeNull()
     expect(matchLfmAuthUrl('https://www.last.fm/api/auth/')).toBeNull()
     expect(matchLfmAuthUrl('https://www.last.fm/login')).toBeNull()
+  })
+})
+
+describe('Last.fm callback validation', () => {
+  it('accepts the configured local callback and rejects lookalike hosts', () => {
+    expect(matchLfmAuthUrl('http://127.0.0.1:8889/lastfm/callback?token=TEST')).toBe('TEST')
+    expect(matchLfmAuthUrl('https://www.last.fm.evil.test/api/auth/?token=TEST')).toBeNull()
+    expect(matchLfmAuthUrl('http://127.0.0.1:8889/other?token=TEST')).toBeNull()
   })
 })

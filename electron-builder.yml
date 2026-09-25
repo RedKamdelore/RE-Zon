@@ -1,5 +1,11 @@
 ﻿appId: com.rezon.app
 productName: ReZon
+artifactName: ReZon-Setup-${version}-${arch}.${ext}
+publish:
+  provider: github
+  owner: RedKamdelore
+  repo: RE-Zon
+  releaseType: draft
 directories:
   output: release
 files:
@@ -10,10 +16,16 @@ extraResources:
     to: demo
   - from: resources/icon.png
     to: icon.png
+  - from: resources/updates.json
+    to: updates.json
 win:
   target: nsis
-  icon: resources/icon.png
+  icon: resources/icon.ico
+  signExecutable: false
 nsis:
+  include: resources/installer.nsh
   oneClick: false
   allowToChangeInstallationDirectory: true
   shortcutName: ReZon
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true

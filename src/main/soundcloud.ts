@@ -71,6 +71,7 @@ interface ScTranscoding {
 }
 
 interface ScTrackItem {
+  artwork_url?: string
   id?: number
   title?: string
   duration?: number // миллисекунды
@@ -79,6 +80,7 @@ interface ScTrackItem {
 }
 
 interface ScSearchResponse {
+  next_href?: string
   collection?: ScTrackItem[]
 }
 
@@ -88,26 +90,30 @@ interface ScSearchResponse {
  * при воспроизведении (см. scResolveStreamWith / IPC sc:resolveStream).
  * Предпочитаем progressive (mp3), hls — только как fallback.
  */
-export async function scSearchTracksWith(
+export async function scSearchPageWith(
   fetcher: ScFetcher,
   clientId: string,
   query: string,
   limit = 50,
-): Promise<ImportedTrack[]> {
-  const url =
+  cursor?: string,
+): Promise<{tracks:ImportedTrack[];nextCursor?:string}> {
+  const url = cursor ||
     `${API_BASE}/search/tracks?q=${encodeURIComponent(query)}` +
     `&client_id=${encodeURIComponent(clientId)}&limit=${limit}`
+  const parsed=new URL(url)
+  if(parsed.origin!==API_BASE || parsed.pathname!=='/search/tracks') throw new Error('SoundCloud: неверный адрес страницы поиска')
   const res = await fetcher(url)
   if (!res.ok) throw new Error(`SoundCloud: HTTP ${res.status}`)
   const data = JSON.parse(await res.text()) as ScSearchResponse
   const items = data.collection
-  if (!Array.isArray(items)) return []
-  return items.map((t) => {
+  if (!Array.isArray(items)) throw new Error("SoundCloud: неизвестный формат поиска")
+  const tracks = items.map((t) => {
     const transcodings = t.media?.transcodings ?? []
     const chosen =
       transcodings.find((x) => x.format?.protocol === 'progressive' && x.url) ??
       transcodings.find((x) => x.url)
     return {
+      coverUrl: t.artwork_url?.startsWith('https://') ? t.artwork_url : undefined,
       title: t.title ?? '',
       artist: t.user?.username ?? '',
       durationSec: typeof t.duration === 'number' ? Math.round(t.duration / 1000) : undefined,
@@ -115,6 +121,14 @@ export async function scSearchTracksWith(
       extId: t.id !== undefined ? String(t.id) : undefined,
     }
   })
+  return {tracks,nextCursor:data.next_href}
+}
+export async function scSearchTracksWith(fetcher:ScFetcher,clientId:string,query:string,limit=50):Promise<ImportedTrack[]> {
+  return (await scSearchPageWith(fetcher,clientId,query,limit)).tracks
+}
+export async function scSearchPage(query:string,cursor?:string) {
+  const clientId=await scResolveClientId()
+  return scSearchPageWith(realFetcher,clientId,query,50,cursor)
 }
 
 /** Transcoding API URL → финальный URL аудиопотока (JSON {url}) */
@@ -128,7 +142,7 @@ export async function scResolveStreamWith(fetcher: ScFetcher, transcodingUrl: st
 
 // --- Обёртки над реальным fetch (main-процесс) ---
 
-const realFetcher: ScFetcher = (url) => fetch(url)
+const realFetcher: ScFetcher = (url) => fetch(url, {signal:AbortSignal.timeout(15000)})
 
 export function scResolveClientId(): Promise<string> {
   // Обход для сред, где soundcloud.com недоступен: client_id можно подсмотреть

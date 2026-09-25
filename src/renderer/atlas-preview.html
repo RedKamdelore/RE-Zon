@@ -1,0 +1,13 @@
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><title>Re:Zon — Atlas QA</title></head><body><div id="root"></div><script type="module">
+import {useLibraryStore} from './src/stores/libraryStore';
+import {usePlaylistStore} from './src/stores/playlistStore';
+import {useFavoritesStore} from './src/stores/favoritesStore';
+import {useStatsStore} from './src/stores/statsStore'; import {usePlayerStore} from './src/stores/playerStore'; usePlayerStore.getState().setVolume(0);
+const titles=['Тёплый вечер','Линии света','Тихий город','Параллели','Сквозь облака','Где начинается утро','Невесомость','Время замедлиться','Оставаться собой','После дождя','Северный ветер','Солнечная сторона'];
+const tracks=titles.map((title,i)=>({id:'qa:'+i,title,artist:['Север','Маяк','Орбита'][i%3],album:['Новый день','Ночной город','После дождя'][i%3],durationSec:183+i*7,sourceId:'demo',filePath:location.origin+'/@fs/C:/Users/Administrator/Desktop/САМОПАЛ/ReZon test AI/resources/demo/night-drive.wav'}));
+useLibraryStore.setState({tracks,hiddenIds:[],loading:false,usingDemo:true});
+usePlaylistStore.setState({playlists:[{id:'qa-p1',name:'Медленные утра',trackIds:tracks.slice(0,5).map(t=>t.id),createdAt:1},{id:'qa-p2',name:'Дорога домой',trackIds:tracks.slice(5).map(t=>t.id),createdAt:2}]});
+useFavoritesStore.setState({ids:['qa:0','qa:2','qa:6']});
+useStatsStore.setState({stats:{'qa:0':{count:5,lastPlayed:Date.now()}}});
+await import('./src/main');
+</script></body></html>

@@ -673,3 +673,70 @@ describe('mediaUrl', () => {
     expect(mediaUrl(p)).toBe(`media://${Buffer.from(p, 'utf-8').toString('base64url')}`)
   })
 })
+
+describe('direct audio offline playback', () => {
+  const directTrack: Track = {
+    id: 'direct:example', sourceId: 'direct', title: 'Example', artist: 'Artist',
+    album: '', durationSec: 0, filePath: 'https://audio.example.com/example.mp3',
+  }
+
+  afterEach(() => { delete (globalThis as Record<string, unknown>).window })
+
+  it('queues a direct track for automatic saving after playback starts', async () => {
+    const { engine, calls } = makeFakeEngine()
+    const offlineAutoQueue = vi.fn().mockResolvedValue([])
+    ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve: vi.fn().mockResolvedValue(null), offlineAutoQueue } }
+    createPlayerStore(engine).getState().playTracks([directTrack], 0)
+    await vi.waitFor(() => expect(calls.play).toEqual([directTrack.filePath]))
+    expect(offlineAutoQueue).toHaveBeenCalledOnce()
+    expect(offlineAutoQueue).toHaveBeenCalledWith(directTrack)
+  })
+
+  it('plays the saved file when available', async () => {
+    const { engine, calls } = makeFakeEngine()
+    const offlineResolve = vi.fn().mockResolvedValue('C:\\ReZon\\offline\\example.mp3')
+    ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve } }
+    createPlayerStore(engine).getState().playTracks([directTrack], 0)
+    await vi.waitFor(() => expect(calls.play).toEqual([mediaUrl('C:\\ReZon\\offline\\example.mp3')]))
+    expect(offlineResolve).toHaveBeenCalledWith(directTrack.id)
+  })
+
+  it('uses the remote URL when the copy is absent or lookup fails', async () => {
+    for (const outcome of [null, new Error('Index unavailable')]) {
+      const { engine, calls } = makeFakeEngine()
+      const offlineResolve = outcome instanceof Error ? vi.fn().mockRejectedValue(outcome) : vi.fn().mockResolvedValue(outcome)
+      ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve } }
+      createPlayerStore(engine).getState().playTracks([directTrack], 0)
+      await vi.waitFor(() => expect(calls.play).toEqual([directTrack.filePath]))
+    }
+  })
+})
+
+describe('alternate playback sources',()=>{
+  it('tries each alternative once without losing the following queue item',()=>{
+    const {engine,calls}=makeFakeEngine()
+    const store=createPlayerStore(engine)
+    store.getState().playTracks([{...makeTrack(1),alternateSources:[makeTrack(2),makeTrack(3)]},makeTrack(4)],0)
+    expect(store.getState().retryAlternative()).toBe(true)
+    expect(store.getState().queue[0].id).toBe('local:t2')
+    expect(store.getState().retryAlternative()).toBe(true)
+    expect(store.getState().queue[0].id).toBe('local:t3')
+    expect(store.getState().retryAlternative()).toBe(false)
+    expect(store.getState().queue[1].id).toBe('local:t4')
+    expect(calls.play).toHaveLength(3)
+  })
+})
+
+it('audio errors try the alternative source before skipping to the next song',()=>{
+ const {engine,fire}=makeFakeEngine();const store=createPlayerStore(engine)
+ store.getState().playTracks([{...makeTrack(1),alternateSources:[makeTrack(2)]},makeTrack(3)],0)
+ const unsubscribe=initPlayerSubscriptions(engine,store)
+ try {fire('error');expect(store.getState().pos).toBe(0);expect(store.getState().queue[0].id).toBe('local:t2');fire('error');expect(store.getState().pos).toBe(1)}finally{unsubscribe()}
+})
+
+it('stops after the last broken source even when repeat is enabled',()=>{
+ const {engine,fire}=makeFakeEngine();const store=createPlayerStore(engine)
+ store.setState({repeat:'all'});store.getState().playTracks([makeTrack(1)],0)
+ const unsubscribe=initPlayerSubscriptions(engine,store)
+ try{fire('error');expect(store.getState().playing).toBe(false)}finally{unsubscribe()}
+})

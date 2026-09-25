@@ -1,8 +1,12 @@
 export interface Track {
   id: string;            // `${sourceId}:${path или demoId}`
   sourceId: string;      // 'local' | 'demo' | 'vk' | 'soundcloud'
+  accountId?: string;
+  alternateSources?: Track[]; // только очередь: резервные варианты той же записи
   title: string;
   artist: string;
+  albumId?: string;
+  albumArtist?: string;
   album: string;
   durationSec: number;
   coverDataUrl?: string; // base64 из тегов
@@ -62,4 +66,6 @@ export interface PersistedData {
   hiddenTracks: string[];
   // id треков, добавленных в «Любимое» (сердечко; виртуальный плейлист)
   favoriteIds: string[];
+  serviceAccounts?: Record<string, import('./accounts').ServiceAccount>;
+  accountLibraries?: Record<string, import('./accounts').AccountLibrary>;
 }

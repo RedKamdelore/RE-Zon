@@ -1,0 +1,164 @@
+/* Shared visual rhythm; colors and materials remain controlled by the theme. */
+:root { --sidebar-width: 256px; --playerbar-height: 88px; }
+body { font-size: 14px; }
+button, input, select, textarea { font-family: inherit; }
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.app { gap: 12px; padding: 12px; }
+.sidebar { gap: 12px; }
+.sidebar-card { padding: 12px; }
+.brand { padding: 10px 12px 18px; letter-spacing: -.5px; }
+.nav-row { min-height: 42px; padding: 10px 12px; gap: 12px; font-size: 14px; font-weight: 500; border-radius: 8px; }
+.nav-row.active { box-shadow: inset 3px 0 var(--accent); }
+.library-header { padding: 10px 8px 16px; font-size: 13px; }
+.playlist-row { min-height: 48px; gap: 10px; padding: 7px; font-size: 13px; border-radius: 8px; }
+.playlist-cover { width: 34px; height: 34px; border-radius: 6px; }
+.library-folder > summary { min-height: 40px; padding: 9px 6px; }
+.service-section { line-height: 1.5; padding: 8px; }
+.library-playlists-label { border-top: 1px solid var(--border-subtle); padding-top: 16px; }
+.main { background-color: var(--bg-panel); padding: 28px; }
+.main h1 { font-size: clamp(24px, 2.4vw, 34px); line-height: 1.2; letter-spacing: -.8px; margin: 0 0 10px; }
+.main h2 { font-size: 18px; line-height: 1.4; letter-spacing: -.3px; }
+.main .muted { font-size: 13px; line-height: 1.6; }
+.home-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+.home-heading p { margin: 0; }
+.home-heading > button { flex-shrink: 0; }
+.page-eyebrow { display: block; color: var(--text-secondary); font-size: 10px; font-weight: 600; letter-spacing: .15em; margin-bottom: 12px; }
+.tile-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 0 0 32px; }
+.tile { height: 88px; gap: 14px; padding: 12px; border-radius: 10px; cursor: default; }
+.tile-cover { width: 60px; height: 60px; border-radius: 7px; }
+.tile-info { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding-right: 44px; }
+.tile-name { font-size: 14px; font-weight: 600; }
+.tile-caption { font-size: 11px; color: var(--text-secondary); }
+.tile-play { width: 34px; height: 34px; right: 12px; opacity: 1; transform: none; box-shadow: none; }
+.tile-play:disabled { opacity: .35; cursor: default; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 24px 0 14px; }
+.section-heading h2 { margin: 0; }
+.tl-header { padding: 12px; background: var(--bg-panel); font-size: 10px; letter-spacing: .08em; }
+.tl-row { min-height: 58px; padding: 8px 12px; border-radius: 7px; }
+.tl-cover { width: 38px; height: 38px; border-radius: 6px; }
+.tl-bulk { padding: 10px 0 14px; }
+.btn-outline, .eq-preset { min-height: 34px; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 500; line-height: 1.3; }
+.btn-outline:disabled { opacity: .5; cursor: default; }
+.settings-input, .search-input, .rename-input { border-radius: 8px; min-height: 38px; padding: 9px 12px; font-size: 13px; }
+.pl-header { gap: 24px; margin-bottom: 24px; }
+.playerbar { background-color: var(--bg-panel); border-radius: var(--radius-card); padding: 12px 18px; }
+.pb-cover { width: 48px; height: 48px; border-radius: 7px; }
+.right-panel { padding-top: 8px; }
+.main:has(> .settings-workspace) { padding: 24px; }
+.settings-heading { padding: 0 0 20px; }
+.settings-heading > .muted { display: none; }
+.settings-layout { grid-template-columns: 170px minmax(0, 1fr); border: none; border-radius: 0; }
+.settings-navigation { background: transparent; padding: 0 14px 0 0; gap: 5px; }
+.settings-navigation > button { padding: 11px 12px; line-height: 1.5; border-radius: 8px; }
+.settings-navigation > p { margin-left: 12px; font-size: 11px; }
+.settings-content { padding: 0 0 24px 28px; }
+.settings-page-heading { margin-bottom: 24px; }
+.settings-page-heading > h2 { margin-top: 0; font-size: 22px; }
+.settings-content .settings-section { margin: 0 0 24px; }
+.settings-content .settings-section > h2 { margin-top: 20px; font-size: 13px; font-weight: 600; }
+.settings-content .settings-label { font-size: 12px; font-weight: 500; margin-top: 20px; }
+.skin-row { gap: 10px; }
+.skin-card { width: 110px; padding: 8px; gap: 8px; border-radius: 9px; }
+.skin-swatch { width: 90px; height: 58px; border-radius: 5px; }
+.skin-name { font-size: 11px; }
+.import-card { padding: 18px; margin-bottom: 14px; border-radius: 10px; }
+.import-card-name { font-size: 14px; margin-bottom: 14px; }
+.import-card label { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 14px; font-size: 12px; }
+.import-card .settings-input { width: 100%; }
+.theme-color-row, .theme-btn-row { gap: 10px; flex-wrap: wrap; }
+@media (max-width: 1100px) {
+  :root { --sidebar-width: 224px; }
+  .main { padding: 22px; }
+  .home-heading { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .settings-layout { grid-template-columns: 145px minmax(0, 1fr); }
+  .settings-content { padding-left: 20px; }
+  .app.panel-open { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 280px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+.catalog-row {display:flex;align-items:center;gap:14px;min-height:76px;padding:12px 8px;border-bottom:1px solid var(--border-subtle)}
+.catalog-title {display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.catalog-title strong,.catalog-title small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catalog-title small {font-size:11px;color:var(--text-secondary)}
+.catalog-row select {max-width:180px;padding:8px;background:var(--bg-tile);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:7px}
+.catalog-row .tl-cover {flex-shrink:0}
+.catalog-row .tl-cover img {width:100%;height:100%;object-fit:cover}
+.search-view .search-input-wrap {flex:1;min-width:200px}
+
+.collection-tabs {display:flex;gap:8px;margin:24px 0 18px}
+.collection-tabs button {border:0;background:transparent;color:inherit;padding:10px 18px;border-radius:10px;cursor:pointer;font:inherit}
+.collection-tabs button.active {background:rgba(128,128,128,.2);box-shadow:inset 0 -2px var(--accent)}
+.collection-tabs span {margin-left:8px;opacity:.7}
+.album-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:20px;max-height:510px;overflow:auto;padding:2px 4px 12px}
+.album-card {display:flex;flex-direction:column;gap:6px;min-width:0;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:8px;border-radius:12px;cursor:pointer}
+.album-card:hover {background:rgba(128,128,128,.12)}
+.album-card .tl-cover {width:100%;height:auto;aspect-ratio:1;border-radius:10px;margin-bottom:6px}
+.album-card strong,.album-card>span {max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.library-folder {margin:8px 0}
+.library-folder summary {cursor:pointer;padding:12px 8px;font-weight:600}
+.library-folder summary span {float:right;opacity:.6}
+.folder-item-text {display:flex;flex-direction:column;min-width:0;gap:3px;text-align:left}
+.folder-item-text strong,.folder-item-text small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-item-text small {opacity:.65}
+
+.playlist-list>.library-folder>summary::before {content:'›';display:inline-block;margin-right:8px;transition:transform .15s}
+.playlist-list>.library-folder[open]>summary::before {transform:rotate(90deg)}
+/* Sidebar navigation: fixed destinations, one scroll area for collections. */
+.sidebar-v2 {gap:8px;min-height:0}
+.sidebar-v2 .sidebar-card {padding:10px}
+.sidebar-v2 .side-primary,.sidebar-v2 .side-footer {flex-shrink:0}
+.sidebar-v2 .brand {padding:10px 10px 16px;font-size:23px}
+.sidebar-v2 .nav-row {width:100%;min-width:0;min-height:40px;padding:9px 10px;font-size:13px;gap:10px;text-align:left}
+.sidebar-v2 .side-label {flex:1;min-width:0}
+.sidebar-v2 .nav-badge {margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;background:var(--hover-overlay);color:inherit;max-width:55px}
+.sidebar-v2 .library {min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.sidebar-v2 .library-header {padding:3px 8px 10px;flex-shrink:0;font-size:10px;letter-spacing:.1em;color:var(--text-secondary)}
+.side-scroll {overflow-y:auto;overflow-x:hidden;min-height:0;scrollbar-gutter:stable;overscroll-behavior:contain}
+.side-filter {display:flex;align-items:center;gap:7px;padding:7px 9px;margin:10px 1px;color:var(--text-secondary);border:1px solid var(--border-subtle);border-radius:8px}
+.side-filter input {width:100%;min-width:0;border:0;background:transparent;color:var(--text-primary);font:inherit;font-size:12px;outline:none}
+.side-filter:focus-within {outline:2px solid var(--accent);outline-offset:1px}
+.side-filter .icon-btn {width:20px;height:20px;flex-shrink:0}
+.side-collection {margin:4px 0}
+.side-folder-heading {display:flex;align-items:center;border-radius:8px;min-height:38px}
+.side-folder-heading.active {background:var(--hover-overlay)}
+.side-folder-heading button {color:var(--text-primary);background:none;border:0;cursor:pointer;font:inherit;font-size:13px}
+.side-disclosure {width:28px;height:36px;flex-shrink:0}
+.side-disclosure span {display:block;transition:transform .15s;font-size:20px}
+.side-disclosure .turned {transform:rotate(90deg)}
+.side-folder-link {display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;padding:10px 8px 10px 0;text-align:left;font-weight:600!important}
+.side-folder-link span {color:var(--text-secondary);font-size:11px}
+.side-collection-items {margin:4px 0 8px 13px;padding-left:8px;border-left:1px solid var(--border-subtle)}
+.sidebar-v2 .playlist-row {min-width:0;width:100%;min-height:44px;padding:6px;gap:8px;color:var(--text-primary);text-align:left}
+.sidebar-v2 .playlist-row .tl-cover {width:30px;height:30px;flex-shrink:0;border-radius:6px}
+.sidebar-v2 .folder-item-text strong {font-size:12px;font-weight:500}
+.sidebar-v2 .folder-item-text small {font-size:10px;color:var(--text-secondary);opacity:1}
+.side-playlist-item {display:flex;align-items:center;min-width:0}
+.side-playlist-item .playlist-row {flex:1;overflow:hidden}
+.side-more {width:24px;height:30px;flex-shrink:0;font-size:18px}
+.side-empty {padding:5px 7px;font-size:11px;color:var(--text-secondary)}
+.side-show-all {border:0;background:transparent;color:var(--text-secondary);font:inherit;font-size:11px;padding:9px;cursor:pointer;text-align:left}
+.side-section-label {font-size:10px;letter-spacing:.1em;color:var(--text-secondary);padding:20px 8px 8px}
+.sidebar-v2 .library-folder {margin:2px 0}
+.sidebar-v2 .library-folder summary {font-weight:500;padding:9px 6px;min-height:36px;gap:7px}
+.sidebar-v2 .library-folder summary span {float:none;opacity:1}
+.sidebar-v2 .folder-label {flex:1;min-width:0;font-size:12px}
+.sidebar-v2 .folder-count {flex:0;font-size:10px}
+.sidebar-v2 .folder-children {margin-left:10px;padding-left:7px}
+.sidebar-v2 .service-section {font-size:11px;min-height:30px;padding:7px 8px}
+.sidebar-v2 .side-footer {padding:5px 10px}
+.side-sc {display:flex;justify-content:space-between;gap:8px;margin-top:5px}
+.side-sc span {font-size:10px;color:var(--text-secondary)}
+.library-view .album-grid {max-height:none;overflow:visible}
+.library-view .tl-bulk .settings-input {max-width:360px;margin:0}
+@media(prefers-reduced-motion:reduce){.side-disclosure span{transition:none}}
+@media(max-height:700px){
+  .sidebar-v2 .brand {font-size:19px;padding:4px 10px 8px}
+  .sidebar-v2 .nav-row {min-height:30px;padding:5px 9px;font-size:12px}
+  .sidebar-v2 .nav-row svg {width:17px;height:17px}
+  .sidebar-v2 .side-primary {padding:7px}
+  .sidebar-v2 .library-header {padding:0 5px 4px}
+  .sidebar-v2 .library-header .icon-btn {height:25px}
+  .sidebar-v2 .side-filter {margin:5px 1px;padding:5px 7px}
+  .sidebar-v2 .side-folder-heading {min-height:31px}
+  .sidebar-v2 .side-folder-link {padding-top:7px;padding-bottom:7px}
+  .sidebar-v2 .side-disclosure {height:31px}
+}

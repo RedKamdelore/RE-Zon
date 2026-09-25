@@ -12,10 +12,9 @@ export const YANDEX_CLIENT_ID = '23beb041b31c4b32b5bcd12fb585764e'
 export const YANDEX_DEVICE_NAME = 'Re:Zon'
 
 export function yaAuthUrl(): string {
-  return (
-    `https://oauth.yandex.ru/authorize?response_type=code` +
-    `&client_id=${YANDEX_CLIENT_ID}&device_name=${encodeURIComponent(YANDEX_DEVICE_NAME)}`
-  )
+  // Встроенный клиент больше не принимается Яндексом (HTTP 400 unknown client_id).
+  // Не отправляем пользователя вводить телефон в заведомо неработающий OAuth flow.
+  throw new Error('Подключение Яндекс Музыки пока недоступно: Яндекс отклонил встроенный Client ID ReZon. Нужен действующий OAuth-клиент с доступом к музыке. Это ошибка интеграции, а не вашего аккаунта.')
 }
 
 /**
@@ -24,8 +23,10 @@ export function yaAuthUrl(): string {
  * redirect приходит на /verification_code с code в query).
  */
 export function matchYaAuthUrl(url: string): string | null {
-  if (!/oauth\.yandex\.ru\/(verification_code|auth)\b/.test(url)) return null
-  const code = new URLSearchParams(url.split('?')[1] ?? '').get('code')
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'oauth.yandex.ru' || !['/verification_code', '/auth'].includes(parsed.pathname)) return null
+  const code = parsed.searchParams.get('code')
   return code ?? null
 }
 
@@ -130,7 +131,8 @@ export async function yaLikesWith(
   if (res.status < 200 || res.status >= 300) {
     throw new Error(`Яндекс: ${data.error_description ?? data.error ?? `HTTP ${res.status}`}`)
   }
-  const items = data.library?.tracks ?? []
+  if (!Array.isArray(data.library?.tracks)) throw new Error('Яндекс: неизвестный формат списка лайков — импорт не изменён')
+  const items = data.library.tracks
   return items
     .map((i) => ({
       title: i.track?.title ?? '',

@@ -13,6 +13,39 @@ export type ConnectionStatusView = {
 }
 
 const api = {
+  publishTrayState: (state: import('../shared/trayPlayer').TrayPlayerState): void => { ipcRenderer.send('tray:publish', state) },
+  offlineList: (): Promise<import('../shared/offline').OfflineItem[]> => ipcRenderer.invoke('offline:list'),
+  offlineQueue: (track: Track): Promise<import('../shared/offline').OfflineItem[]> => ipcRenderer.invoke('offline:queue',track),
+  offlineAutoQueue: (track: Track): Promise<import('../shared/offline').OfflineItem[]> => ipcRenderer.invoke('offline:autoQueue',track),
+  offlineSettings: (): Promise<import('../shared/offlineSettings').OfflineSettings> => ipcRenderer.invoke('offline:settings'),
+  offlineSetSettings: (patch: Partial<import('../shared/offlineSettings').OfflineSettings>): Promise<import('../shared/offlineSettings').OfflineSettings> => ipcRenderer.invoke('offline:setSettings',patch),
+  offlineResolve: (id: string): Promise<string | null> => ipcRenderer.invoke('offline:resolve',id),
+  offlineCancel: (id: string): Promise<import('../shared/offline').OfflineItem[]> => ipcRenderer.invoke('offline:cancel',id),
+  offlineRemove: (id: string): Promise<import('../shared/offline').OfflineItem[]> => ipcRenderer.invoke('offline:remove',id),
+  storageUsage: (paths: string[]): Promise<import('../main/storageUsage').StorageUsage> => ipcRenderer.invoke('storage:usage',paths),
+  offlineOpenFolder: (): Promise<string> => ipcRenderer.invoke('offline:openFolder'),
+  onOfflineState: (cb: (items: import('../shared/offline').OfflineItem[]) => void) => {
+    const listener = (_e: IpcRendererEvent, items: import('../shared/offline').OfflineItem[]): void => cb(items)
+    ipcRenderer.on('offline:state',listener)
+    return () => ipcRenderer.removeListener('offline:state',listener)
+  },
+  resetProfile: (): Promise<boolean> => ipcRenderer.invoke('profile:reset'),
+  pickLrc: (): Promise<string | null> => ipcRenderer.invoke('lyrics:pickLrc'),
+  updatesState: (): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:state'),
+  updatesPreferences: (patch: Partial<import('../shared/updates').UpdatePreferences>): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:preferences', patch),
+  updatesCheck: (): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:check'),
+  updatesDownload: (): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:download'),
+  updatesInstall: (): Promise<import('../shared/updates').UpdateState> => ipcRenderer.invoke('updates:install'),
+  onUpdateState: (cb: (state: import('../shared/updates').UpdateState) => void) => {
+    const listener = (_e: IpcRendererEvent, state: import('../shared/updates').UpdateState): void => cb(state)
+    ipcRenderer.on('updates:state', listener)
+    return () => ipcRenderer.removeListener('updates:state', listener)
+  },
+  accountsList: (): Promise<import('../shared/accounts').AccountView[]> => ipcRenderer.invoke('accounts:list'),
+  accountsConnect: (service:ServiceId,label:string,reconnectId?:string):Promise<{ok:true;account:import('../shared/accounts').AccountView}|{ok:false;error:string}> => ipcRenderer.invoke('accounts:connect',service,label,reconnectId),
+  accountsUpdate: (id:string,patch:{label?:string;autoRefresh?:boolean}):Promise<import('../shared/accounts').AccountView> => ipcRenderer.invoke('accounts:update',id,patch),
+  accountsDisconnect: (id:string):Promise<boolean> => ipcRenderer.invoke('accounts:disconnect',id),
+  accountsImport: (id:string):Promise<{ok:true;library:import('../shared/accounts').AccountLibrary}|{ok:false;error:string}> => ipcRenderer.invoke('accounts:import',id),
   loadData: (): Promise<PersistedData> => ipcRenderer.invoke('data:load'),
   saveData: (d: PersistedData): Promise<void> => ipcRenderer.invoke('data:save', d),
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('library:pickFolder'),
@@ -20,7 +53,8 @@ const api = {
     ipcRenderer.invoke('library:scan', folders),
   demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
   vkImport: (): Promise<VkImportResult> => ipcRenderer.invoke('vk:import'),
-  scSearch: (query: string): Promise<ScSearchResult> => ipcRenderer.invoke('sc:search', query),
+  findAlbumCover: (artist:string,album:string):Promise<string|null> => ipcRenderer.invoke('artwork:album',artist,album),
+  scSearch: (query: string, cursor?: string): Promise<ScSearchResult> => ipcRenderer.invoke('sc:search', query, cursor),
   scResolveStream: (url: string): Promise<string> => ipcRenderer.invoke('sc:resolveStream', url),
   lastfmCall: (method: string, params: Record<string, string | number>): Promise<LfmCallResult> =>
     ipcRenderer.invoke('lastfm:call', method, params),

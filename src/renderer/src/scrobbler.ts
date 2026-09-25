@@ -62,7 +62,7 @@ export async function flushScrobbles(): Promise<void> {
   const batch = queue.splice(0, 50)
   try {
     const res = await window.api.lastfmScrobble(batch)
-    if (!res.ok) console.error('scrobble failed:', res.error)
+    if (!res.ok) throw new Error(res.error || 'Last.fm: ошибка отправки')
   } catch (e) {
     console.error('scrobble failed:', e)
     // сеть упала — вернём батч в голову очереди, отправим со следующим

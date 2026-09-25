@@ -12,7 +12,7 @@ export const DEFAULT_DATA: PersistedData = {
   lyricsOverrides: {},
   volume: 0.8,
   eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  appearance: { skin: 'spotify-dark', theme: defaultTheme(), customThemes: {}, scale: 1 },
+  appearance: { skin: 'atlas', theme: defaultTheme(), customThemes: {}, scale: 1 },
   playback: { crossfadeSec: 0 },
   playStats: {},
   lastfmApiKey: '',
@@ -81,8 +81,11 @@ export function migrateV1toV2(data: Partial<PersistedDataV1>): Omit<PersistedDat
  * accent/radius пользователя. Неизвестный skin → дефолтная тема.
  */
 export function migrateV2toV3(data: Partial<PersistedDataV3>): Omit<PersistedData, 'version' | 'connections' | 'lastfmApiSecret'> & { version: 3 } {
+  if (data.appearance && 'theme' in data.appearance) {
+    return {...DEFAULT_DATA,...data,version:3,appearance:data.appearance} as Omit<PersistedData, 'version' | 'connections' | 'lastfmApiSecret'> & {version:3}
+  }
   const old = data.appearance as AppearanceSettingsV2 | undefined
-  const skin = old?.skin ?? 'spotify-dark'
+  const skin = old?.skin ?? 'atlas'
   const base = BUILTIN_PRESETS[skin] ?? defaultTheme()
   return {
     ...DEFAULT_DATA,
@@ -147,8 +150,8 @@ export function loadData(): PersistedData {
 }
 
 export function saveData(data: PersistedData): void {
-  cache = data
   const tmp = dataPath() + '.tmp'
   writeFileSync(tmp, JSON.stringify(data, null, 2))
   renameSync(tmp, dataPath()) // атомарная запись
+  cache = data
 }

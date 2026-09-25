@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Track } from '@shared/types'
+import Artwork from './Artwork'
 import { sortTracks, nextSortDir, type SortKey, type SortDir } from '@shared/sorting'
 import { usePlayerStore } from '../stores/playerStore'
 import { usePlaylistStore } from '../stores/playlistStore'
@@ -13,6 +14,8 @@ interface TrackListProps {
   tracks: Track[]
   onPlay?: (tracks: Track[], index: number) => void // default: playerStore.playTracks
   onRemoveTrack?: (trackId: string) => void // если задан — в меню появляется «Удалить из плейлиста»
+  onRemoveTracks?: (trackIds: string[]) => void
+  onMoveTrack?: (trackId: string, offset: number) => void
 }
 
 interface MenuState {
@@ -23,7 +26,7 @@ interface MenuState {
 }
 
 /** Кастомное контекстное меню (не нативное) — локально для TrackList */
-function ContextMenu({
+export function ContextMenu({
   menu,
   hasRemove,
   onPlayTrack,
@@ -41,10 +44,17 @@ function ContextMenu({
   const toggleFavorite = useFavoritesStore((s) => s.toggle)
   const isFav = favoriteIds.includes(menu.track.id)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [offlineError, setOfflineError] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   // Кламп к вьюпорту: начальная позиция — точка клика, после монтирования
   // измеряем меню и отражаем вверх/влево, если оно вылезает за край
   const [pos, setPos] = useState({ left: menu.x, top: menu.y })
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    menuRef.current?.querySelector('button')?.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [])
 
   useLayoutEffect(() => {
     const el = menuRef.current
@@ -108,6 +118,11 @@ function ContextMenu({
         >
           {isFav ? '♥ Убрать из любимого' : '♡ В любимое'}
         </button>
+        {t.sourceId === 'direct' && <button className="ctx-item" onClick={() => {
+          setOfflineError('')
+          void window.api.offlineQueue(t).then(() => { useNavStore.getState().setView({name:'settings',page:'downloads'}); onClose() }).catch(error => setOfflineError(error instanceof Error ? error.message : 'Не удалось начать загрузку.'))
+        }}>Сохранить офлайн</button>}
+        {offlineError && <p role="alert" className="import-error">{offlineError}</p>}
         {playlists.length > 0 && (
           <button className="ctx-item" onClick={() => setPickerOpen((v) => !v)}>
             Добавить в плейлист
@@ -210,7 +225,7 @@ function ContextMenu({
   )
 }
 
-export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListProps) {
+export default function TrackList({ tracks, onPlay, onRemoveTrack, onRemoveTracks, onMoveTrack }: TrackListProps) {
   const currentTrackId = usePlayerStore((s) =>
     s.order.length > 0 ? s.queue[s.order[s.pos]]?.id : undefined,
   )
@@ -218,10 +233,37 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
   // Сортировка по столбцам (V3-4d): null — исходный порядок
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null)
   const sorted = useMemo(() => (sort ? sortTracks(tracks, sort.key, sort.dir) : tracks), [tracks, sort])
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const anchor = useRef<string | null>(null)
+  const [notice, setNotice] = useState('')
+  const playlists = usePlaylistStore((s) => s.playlists)
+  const selectedTracks = sorted.filter((t) => selected.has(t.id))
+  const selectedIds = selectedTracks.map((t) => t.id)
+  const selectRow = (id: string, range: boolean): void => {
+    setSelecting(true)
+    setSelected((previous) => {
+      const next = new Set(previous)
+      const from = sorted.findIndex((t) => t.id === anchor.current)
+      const to = sorted.findIndex((t) => t.id === id)
+      if (range && from >= 0) {
+        for (const track of sorted.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(track.id)
+      } else {
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        anchor.current = id
+      }
+      return next
+    })
+  }
+  const finishAction = (message: string): void => {
+    setNotice(message)
+    setSelected(new Set())
+  }
 
   const play = onPlay ?? ((list: Track[], index: number) => usePlayerStore.getState().playTracks(list, index))
 
-  if (tracks.length === 0) {
+  if (tracks.length === 0 && !notice) {
     return <p className="muted">Здесь пока ничего нет</p>
   }
 
@@ -236,7 +278,52 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
   )
 
   return (
-    <div className="tl">
+    <div className="tl" tabIndex={0} aria-label="Список треков"
+      onKeyDown={(e) => {
+        if ((e.target as HTMLElement).matches('input, select, textarea')) return
+        if ((e.ctrlKey || e.metaKey) && e.code === 'KeyA') {
+          e.preventDefault()
+          setSelecting(true)
+          setSelected(new Set(sorted.map((t) => t.id)))
+        }
+        if (e.key === 'Escape') { setSelecting(false); setSelected(new Set()); setMenu(null) }
+      }}>
+      <div className="tl-bulk" aria-label="Действия с треками">
+        <button className="btn-outline" onClick={() => { setSelecting(!selecting); setSelected(new Set()) }}>
+          {selecting ? 'Завершить выделение' : 'Выбрать треки'}
+        </button>
+        {sort && <button className="text-button" onClick={()=>setSort(null)}>Вернуть исходный порядок</button>}
+        {selecting && <>
+          <span aria-live="polite">Выбрано: {selectedIds.length}</span>
+          <button className="btn-outline" onClick={() => setSelected(new Set(sorted.map((t) => t.id)))}>Выбрать все ({sorted.length})</button>
+          <button className="btn-outline" onClick={() => setSelected(new Set())}>Снять выделение</button>
+          <button className="btn-outline" disabled={!selectedIds.length} onClick={() => { play(selectedTracks, 0); setNotice(`Воспроизведение: ${selectedIds.length} треков`) }}>Воспроизвести</button>
+          <button className="btn-outline" disabled={!selectedIds.length} onClick={() => {
+            for (const t of selectedTracks) usePlayerStore.getState().enqueue(t)
+            finishAction(`Добавлено в очередь: ${selectedIds.length}`)
+          }}>В очередь</button>
+          <button className="btn-outline" disabled={!selectedIds.length} onClick={() => {
+            useFavoritesStore.getState().setMany(selectedIds, true); finishAction(`Добавлено в любимое: ${selectedIds.length}`)
+          }}>В любимое</button>
+          <button className="btn-outline" disabled={!selectedIds.length} onClick={() => {
+            useFavoritesStore.getState().setMany(selectedIds, false); finishAction(`Убрано из любимого: ${selectedIds.length}`)
+          }}>Убрать из любимого</button>
+          <select aria-label="Добавить выбранные треки в плейлист" value="" disabled={!selectedIds.length || !playlists.length}
+            onChange={(e) => { usePlaylistStore.getState().addTracks(e.target.value, selectedIds); finishAction(`Добавлено в плейлист: ${selectedIds.length}`) }}>
+            <option value="" disabled>В плейлист…</option>
+            {playlists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {onRemoveTracks && <button className="btn-outline" disabled={!selectedIds.length} onClick={() => {
+            onRemoveTracks(selectedIds); finishAction(`Убрано из плейлиста: ${selectedIds.length}`)
+          }}>Убрать из плейлиста</button>}
+          <button className="btn-outline" disabled={!selectedIds.length} title="Скрыть в программе, сохранив файлы на диске" onClick={() => {
+            useLibraryStore.getState().hideTracks(selectedIds)
+            finishAction(`Убрано из библиотеки: ${selectedIds.length}. Файлы сохранены.`)
+          }}>Убрать из библиотеки</button>
+        </>}
+      </div>
+      {notice && <div className="tl-bulk-notice" role="status">{notice}
+      </div>}
       <div className="tl-header">
         <span className="tl-num">#</span>
         {headerCell('title', 'Название')}
@@ -252,27 +339,35 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
             )}
           </button>
         </span>
+        <span/>
       </div>
       {sorted.map((t, i) => (
         <div
           key={t.id}
-          className="tl-row"
-          onClick={() => play(sorted, i)}
+          className={`tl-row${selected.has(t.id) ? ' tl-selected' : ''}`}
+          tabIndex={0}
+          aria-label={`${t.artist} — ${t.title}`}
+          onDoubleClick={()=>play(sorted,i)}
+          onKeyDown={e=>{if(e.target===e.currentTarget&&e.key==='Enter'){e.preventDefault();play(sorted,i)}if(e.target===e.currentTarget&&e.code==='Space'){e.preventDefault();e.stopPropagation();selectRow(t.id,e.shiftKey)}}}
+          onClick={(e) => {
+            selectRow(t.id, e.shiftKey)
+          }}
           onContextMenu={(e) => {
             e.preventDefault()
             setMenu({ x: e.clientX, y: e.clientY, track: t, index: i })
           }}
         >
           <span className="tl-num-wrap">
-            <span className="tl-num">{i + 1}</span>
-            <span className="tl-play">
+            {selecting ? <input type="checkbox" aria-label={`Выбрать ${t.artist} — ${t.title}`}
+              checked={selected.has(t.id)} onChange={() => {}}
+              onClick={(e) => { e.stopPropagation(); selectRow(t.id, e.shiftKey) }} /> : <>
+            <button className="icon-btn row-play" aria-label={`Слушать ${t.title}`} onClick={e=>{e.stopPropagation();play(sorted,i)}}>
               <PlayIcon size={14} />
-            </span>
+            </button>
+            </>}
           </span>
           <span className="tl-title-cell">
-            <span className="tl-cover">
-              {t.coverDataUrl ? <img src={t.coverDataUrl} alt="" /> : <MusicNoteIcon size={20} />}
-            </span>
+            <Artwork src={t.coverDataUrl} artist={t.artist} album={t.album}/>
             <span className="tl-title-text">
               <span className={`tl-title${t.id === currentTrackId ? ' playing' : ''}`}>
                 {t.title}
@@ -292,6 +387,7 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack }: TrackListPr
           </span>
           <span className="tl-album">{t.album}</span>
           <span className="tl-duration">{fmt(t.durationSec)}</span>
+          <span className="track-row-actions">{onMoveTrack&&!sort&&<><button className="icon-btn" aria-label={`Выше: ${t.title}`} disabled={i===0} onClick={e=>{e.stopPropagation();onMoveTrack(t.id,-1)}}>↑</button><button className="icon-btn" aria-label={`Ниже: ${t.title}`} disabled={i===sorted.length-1} onClick={e=>{e.stopPropagation();onMoveTrack(t.id,1)}}>↓</button></>}<button className="icon-btn" aria-label={`Действия: ${t.title}`} onClick={e=>{e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();setMenu({x:r.right,y:r.bottom,track:t,index:i})}}>⋯</button></span>
         </div>
       ))}
       {menu && (

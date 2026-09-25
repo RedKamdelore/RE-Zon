@@ -203,3 +203,16 @@ describe('scResolveStreamWith', () => {
     await expect(scResolveStreamWith(fetcher, 'https://x')).rejects.toThrow(/недоступен/)
   })
 })
+import { scSearchPageWith } from './soundcloud'
+describe('SoundCloud pagination',()=>{
+ it('returns the next page and provider artwork',async()=>{
+   const fetcher=async()=>({ok:true,status:200,text:async()=>JSON.stringify({collection:[{id:1,title:'Track',artwork_url:'https://i1.sndcdn.com/art.jpg'}],next_href:'https://api-v2.soundcloud.com/search/tracks?offset=50'})})
+   const page=await scSearchPageWith(fetcher,'key','track')
+   expect(page.nextCursor).toContain('offset=50');expect(page.tracks[0].coverUrl).toBe('https://i1.sndcdn.com/art.jpg')
+ })
+ it('rejects a foreign pagination host before issuing requests',async()=>{
+   const fetcher=vi.fn()
+   await expect(scSearchPageWith(fetcher,'key','q',50,'https://example.com/private')).rejects.toThrow('неверный адрес')
+   expect(fetcher).not.toHaveBeenCalled()
+ })
+})

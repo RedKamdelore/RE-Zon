@@ -37,6 +37,7 @@ export function handleHotkey(e: KeyboardEvent, deps: HotkeyDeps): boolean {
   const p = deps.player
 
   if (!mod && e.code === 'Space' && !isTypingTarget(e.target)) {
+    if ((e.target as HTMLElement | null)?.closest?.('button, [role="button"]')) return false
     p.togglePlay()
     return true
   }

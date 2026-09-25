@@ -14,13 +14,8 @@ function okRequester(data: unknown, status = 200): YaRequester & ReturnType<type
 }
 
 describe('yaAuthUrl', () => {
-  it('builds oauth.yandex.ru authorize url with client id and device name', () => {
-    const url = new URL(yaAuthUrl())
-    expect(url.hostname).toBe('oauth.yandex.ru')
-    expect(url.pathname).toBe('/authorize')
-    expect(url.searchParams.get('response_type')).toBe('code')
-    expect(url.searchParams.get('client_id')).toBe(YANDEX_CLIENT_ID)
-    expect(url.searchParams.get('device_name')).toBe('Re:Zon')
+  it('does not launch authorization with the rejected built-in client', () => {
+    expect(() => yaAuthUrl()).toThrow('Яндекс отклонил встроенный Client ID')
   })
 })
 

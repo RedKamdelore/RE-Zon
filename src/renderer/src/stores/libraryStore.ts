@@ -14,6 +14,7 @@ function mergeById(base: Track[], extra: Track[]): Track[] {
 interface LibraryState {
   tracks: Track[]
   hiddenIds: string[] // id скрытых треков (persist → hiddenTracks); tracks хранит их все
+  lastHiddenIds: string[]
   loading: boolean
   usingDemo: boolean
   init: (data?: PersistedData) => Promise<void> // data из App (единый loadData); без него — сам грузит
@@ -23,6 +24,8 @@ interface LibraryState {
   /** VK-реимпорт: обновляет существующие треки (протухшие url) + добавляет новые; возвращает [обновлено, добавлено] */
   upsertTracks: (tracks: Track[]) => [number, number]
   hideTrack: (id: string) => void // скрыть из библиотеки (исчезает из списков, играющий доигрывает)
+  hideTracks: (ids: string[]) => void
+  unhideTracks: (ids: string[]) => void
   unhideTrack: (id: string) => void // вернуть скрытый трек
 }
 
@@ -45,6 +48,7 @@ export function visibleTracks(s: Pick<LibraryState, 'tracks' | 'hiddenIds'>): Tr
 export const useLibraryStore = create<LibraryState>()((set, get) => ({
   tracks: [],
   hiddenIds: [],
+  lastHiddenIds: [],
   loading: true,
   usingDemo: false,
 
@@ -62,8 +66,8 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
 
   /**
    * VK-реимпорт (V3-3b): свежие streamUrl у уже добавленных треков (VK-ссылки
-   * живут часы), плюс новые треки с прошлого импорта. Тексты/обложки
-   * существующих не трогаем — только воспроизводимость. Возвращает счётчики.
+   * живут часы), плюс новые треки с прошлого импорта. Сохраняем пользовательские тексты и обложки; дополняем отсутствующие
+   * названия альбомов и обложки. Новые записи помещаем первыми. Возвращает счётчики.
    */
   upsertTracks: (incoming) => {
     const byId = new Map(get().tracks.map((t) => [t.id, t]))
@@ -72,8 +76,10 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     for (const t of incoming) {
       const existing = byId.get(t.id)
       if (existing) {
-        if (t.filePath && t.filePath !== existing.filePath) {
-          byId.set(t.id, { ...existing, filePath: t.filePath })
+        const albumMissing = !existing.album || ['vk','soundcloud','spotify','yandex','lastfm','без альбома'].includes(existing.album.toLowerCase())
+        const album = albumMissing && t.album ? t.album : existing.album
+        if ((t.filePath && t.filePath !== existing.filePath) || (!existing.coverDataUrl && t.coverDataUrl) || album !== existing.album || (t.albumId && t.albumId !== existing.albumId) || (t.albumArtist && t.albumArtist !== existing.albumArtist)) {
+          byId.set(t.id, { ...existing, album, albumId:t.albumId ?? existing.albumId, albumArtist:t.albumArtist ?? existing.albumArtist, filePath: t.filePath || existing.filePath, coverDataUrl: existing.coverDataUrl || t.coverDataUrl })
           updated++
         }
       } else {
@@ -82,7 +88,8 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
       }
     }
     if (updated === 0 && added === 0) return [0, 0]
-    const tracks = [...byId.values()]
+    const previousIds = new Set(get().tracks.map(t=>t.id))
+    const tracks = [...byId.values()].filter(t=>!previousIds.has(t.id)).concat([...byId.values()].filter(t=>previousIds.has(t.id)))
     set({ tracks })
     persistPatch({ importedTracks: tracks.filter(isImported) })
     return [updated, added]
@@ -120,6 +127,20 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     persistPatch({ hiddenTracks: hiddenIds })
   },
 
+  hideTracks: (ids) => {
+    const alreadyHidden = new Set(get().hiddenIds)
+    const hiddenIds = [...new Set([...get().hiddenIds, ...ids])]
+    set({ hiddenIds, lastHiddenIds: [...new Set(ids)].filter((id) => !alreadyHidden.has(id)) })
+    persistPatch({ hiddenTracks: hiddenIds })
+  },
+
+  unhideTracks: (ids) => {
+    const restored = new Set(ids)
+    const hiddenIds = get().hiddenIds.filter((id) => !restored.has(id))
+    set({ hiddenIds, lastHiddenIds: get().lastHiddenIds.filter((id) => !restored.has(id)) })
+    persistPatch({ hiddenTracks: hiddenIds })
+  },
+
   unhideTrack: (id) => {
     if (!get().hiddenIds.includes(id)) return
     const hiddenIds = get().hiddenIds.filter((x) => x !== id)
@@ -141,7 +162,7 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     setPersistedBase(updated)
     set({ loading: true })
     const tracks = await window.api.scanLibrary(musicFolders)
-    set({ tracks, usingDemo: false, loading: false })
+    set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), usingDemo: false, loading: false })
   },
 
   removeFolder: async (folder) => {
@@ -154,10 +175,10 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     set({ loading: true })
     if (musicFolders.length === 0) {
       const tracks = await window.api.demoLibrary()
-      set({ tracks, usingDemo: true, loading: false })
+      set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), usingDemo: true, loading: false })
     } else {
       const tracks = await window.api.scanLibrary(musicFolders)
-      set({ tracks, usingDemo: false, loading: false })
+      set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), usingDemo: false, loading: false })
     }
   },
 }))

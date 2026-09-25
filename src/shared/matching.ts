@@ -8,6 +8,9 @@ import type { Track } from './types'
 export interface ImportedTrack {
   title: string
   artist: string
+  coverUrl?: string
+  albumId?: string
+  albumArtist?: string
   album?: string
   durationSec?: number
   streamUrl?: string
@@ -21,7 +24,7 @@ export type VkImportResult =
 
 /** То же для поиска SoundCloud (sc:search) */
 export type ScSearchResult =
-  | { ok: true; tracks: ImportedTrack[] }
+  | { ok: true; tracks: ImportedTrack[]; nextCursor?: string }
   | { ok: false; error: string }
 
 /** Нижний регистр + пунктуация → пробел + схлопывание пробелов (общая база) */

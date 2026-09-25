@@ -31,6 +31,7 @@ async function toTrack(filePath: string): Promise<Track | null> {
       sourceId: 'local',
       title: meta.common.title ?? filePath.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, ''),
       artist: meta.common.artist ?? 'Неизвестный исполнитель',
+      albumArtist: meta.common.albumartist,
       album: meta.common.album ?? 'Неизвестный альбом',
       durationSec: Math.round(meta.format.duration ?? 0),
       coverDataUrl: pic

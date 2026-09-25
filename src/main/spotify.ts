@@ -12,7 +12,7 @@ import { createHash, randomBytes } from 'crypto'
  */
 
 export const SPOTIFY_REDIRECT = 'http://127.0.0.1:8888/callback'
-export const SPOTIFY_SCOPES = 'playlist-read-private playlist-read-collaborative'
+export const SPOTIFY_SCOPES = 'playlist-read-private playlist-read-collaborative user-library-read'
 
 // --- PKCE-примитивы -----------------------------------------------------------
 
@@ -42,8 +42,11 @@ export function spAuthUrl(clientId: string, challenge: string, state: string): s
 
 /** Матчит redirect: ?code=…&state=… — успех; ?error=… — отказ пользователя */
 export function matchSpotifyCallback(url: string, state: string): { code: string } | null {
-  if (!url.startsWith(SPOTIFY_REDIRECT)) return null
-  const params = new URLSearchParams(url.split('?')[1] ?? '')
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  const expected = new URL(SPOTIFY_REDIRECT)
+  if (parsed.origin !== expected.origin || parsed.pathname !== expected.pathname) return null
+  const params = parsed.searchParams
   if (params.get('error')) return null
   if (params.get('state') !== state) return null
   const code = params.get('code')
@@ -146,6 +149,7 @@ interface SpApiPlaylist {
 
 interface SpApiPage {
   items?: Array<{
+    item?: { id?: string; name?: string; artists?: Array<{ name?: string }> }
     track?: {
       id?: string
       name?: string
@@ -190,11 +194,11 @@ export async function spPlaylistTracksWith(
   playlistId: string,
 ): Promise<Array<{ title: string; artist: string }>> {
   const out: Array<{ title: string; artist: string }> = []
-  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`
+  let url: string | null = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items?limit=100`
   while (url) {
     const data = (await spGet(requester, url, token)) as SpApiPage
     for (const item of data.items ?? []) {
-      const t = item.track
+      const t = item.item ?? item.track
       if (!t?.name) continue // локальные/удалённые треки
       out.push({
         title: t.name,

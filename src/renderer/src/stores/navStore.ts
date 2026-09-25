@@ -2,17 +2,24 @@ import { create } from 'zustand'
 
 export type View =
   | { name: 'home' }
-  | { name: 'search' }
+  | { name: 'library'; section: 'songs' | 'albums' | 'playlists' | 'artists' | 'favorites' }
+  | { name: 'sources' }
+  | { name: 'search'; query?: string }
   | { name: 'playlist'; id: string }
   | { name: 'favorites' }
-  | { name: 'settings' }
+  | { name: 'settings'; page?: 'integrations' | 'updates' | 'data' | 'downloads' }
   | { name: 'artist'; artist: string }
-  | { name: 'album'; album: string; artist?: string }
+  | { name: 'album'; album: string; artist?: string; albumKey?: string }
   | { name: 'radio'; trackId: string }
+  | { name: 'service'; accountId: string; section: import('@shared/accounts').AccountSection }
 
 interface NavState {
   view: View
   setView: (view: View) => void
+  past: View[]
+  future: View[]
+  back: () => void
+  forward: () => void
 }
 
 /**
@@ -21,5 +28,8 @@ interface NavState {
  */
 export const useNavStore = create<NavState>()((set) => ({
   view: { name: 'home' },
-  setView: (view) => set({ view }),
+  past: [], future: [],
+  setView: (view) => set(s => JSON.stringify(s.view) === JSON.stringify(view) ? {} : { view, past: [...s.past, s.view].slice(-60), future: [] }),
+  back: () => set(s => s.past.length ? { view: s.past[s.past.length - 1], past: s.past.slice(0, -1), future: [s.view, ...s.future] } : {}),
+  forward: () => set(s => s.future.length ? { view: s.future[0], past: [...s.past, s.view], future: s.future.slice(1) } : {}),
 }))

@@ -1,8 +1,17 @@
-import { app, BrowserWindow, protocol, net } from 'electron'
+import { app, BrowserWindow, protocol, net, dialog } from 'electron'
 import { join, extname } from 'path'
 import { pathToFileURL } from 'url'
 import { registerIpc } from './ipc'
 import { createTray } from './tray'
+import { registerUpdates } from './updates'
+import { applyPendingProfileReset } from './profileReset'
+import { registerProfileReset } from './profileResetIpc'
+import { MainWindowController } from './mainWindow'
+import type { Tray } from 'electron'
+import { registerOfflineDownloads } from './offlineIpc'
+import { TrayPopup } from './trayPopup'
+import { triggerAutomaticUpdateCheck } from './updateSchedule'
+import type { UpdateController } from './updateController'
 
 // Декодирует media://<base64url путь> → file stream
 protocol.registerSchemesAsPrivileged([
@@ -24,9 +33,9 @@ function decodeMediaUrl(url: string): string {
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 940, minHeight: 600,
-    backgroundColor: '#121212',
+    backgroundColor: '#171A1E',
     autoHideMenuBar: true,
-    icon: join(__dirname, '../../resources/icon.png'),
+    icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../resources/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -40,7 +49,35 @@ function createWindow(): BrowserWindow {
   return win
 }
 
-app.whenReady().then(() => {
+const primaryInstance = app.requestSingleInstanceLock()
+const mainWindow = new MainWindowController(createWindow)
+let tray: Tray | null = null
+let trayPopup: TrayPopup | null = null
+let updates: UpdateController | null = null
+app.on('before-quit', () => {
+  mainWindow.beginQuit()
+  trayPopup?.destroy()
+  tray?.destroy()
+  tray = null
+})
+if (!primaryInstance) app.quit()
+let profileReady = primaryInstance
+if (primaryInstance) {
+  try { applyPendingProfileReset(app.getPath('appData'), app.getPath('userData')) }
+  catch {
+    profileReady = false
+    dialog.showErrorBox('Не удалось сбросить профиль', 'Закройте остальные процессы Re:Zon и запустите приложение снова. Сброс будет повторён; приложение не откроет частично очищенный профиль.')
+    app.quit()
+  }
+}
+app.on('second-instance', () => {
+  if (profileReady && app.isReady()) {
+    mainWindow.show()
+    if (updates) triggerAutomaticUpdateCheck(updates)
+  }
+})
+
+if (profileReady) app.whenReady().then(() => {
   protocol.handle('media', async (req) => {
     try {
       const filePath = decodeMediaUrl(req.url)
@@ -64,14 +101,17 @@ app.whenReady().then(() => {
       return new Response('Not found', { status: 404 })
     }
   })
-  const win = createWindow()
-  registerIpc(win)
-  createTray(win)
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+  trayPopup = new TrayPopup(() => mainWindow.show(), command => mainWindow.send(command), () => mainWindow.current())
+  mainWindow.ensure()
+  registerIpc(() => mainWindow.ensure())
+  registerOfflineDownloads()
+  const currentUpdates = registerUpdates()
+  updates = currentUpdates
+  registerProfileReset(() => mainWindow.current(), () => !['checking', 'downloading', 'installing'].includes(currentUpdates.getState().phase))
+  tray = createTray({ show: () => mainWindow.show(), showPopup: bounds => trayPopup?.toggle(bounds), send: command => mainWindow.send(command) })
+  app.on('activate', () => mainWindow.show())
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (!tray && process.platform !== 'darwin') app.quit()
 })

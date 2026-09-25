@@ -4,7 +4,7 @@ import { defaultTheme, themeToCss, type ThemeConfig } from '@shared/themeModel'
 export { lightenHex } from '@shared/themeModel'
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
-  skin: 'spotify-dark',
+  skin: 'atlas',
   theme: defaultTheme(),
   customThemes: {},
   scale: 1,

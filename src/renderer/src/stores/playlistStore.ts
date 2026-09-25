@@ -15,7 +15,10 @@ interface PlaylistState {
   rename: (id: string, name: string) => void
   remove: (id: string) => void
   addTrack: (playlistId: string, trackId: string) => void
+  addTracks: (playlistId: string, trackIds: string[]) => void
+  removeTracks: (playlistId: string, trackIds: string[]) => void
   removeTrack: (playlistId: string, index: number) => void
+  moveTrack: (playlistId: string, trackId: string, offset: number) => void
   setCover: (id: string, coverDataUrl: string) => void
 }
 
@@ -47,15 +50,22 @@ let pendingPatch: Partial<PersistedData> = {}
 export function persistPatch(patch: Partial<PersistedData>): void {
   pendingPatch = { ...pendingPatch, ...patch }
   if (persistTimer !== null) clearTimeout(persistTimer)
-  persistTimer = setTimeout(() => {
-    persistTimer = null
-    const merged = pendingPatch
-    pendingPatch = {}
-    if (typeof window === 'undefined' || !window.api || !persistedBase) return
-    // Обновляем базу в памяти, чтобы следующие сохранения мержились с ней
-    persistedBase = { ...persistedBase, ...merged }
-    window.api.saveData(persistedBase).catch((e) => console.error('saveData failed:', e))
-  }, PERSIST_DELAY)
+  persistTimer = setTimeout(() => { void flushPersist().catch((e) => console.error('saveData failed:', e)) }, PERSIST_DELAY)
+}
+
+/** Перед входом сервис должен увидеть только что введённые настройки. */
+export async function flushPersist(): Promise<void> {
+  if (persistTimer !== null) clearTimeout(persistTimer)
+  persistTimer = null
+  const merged = pendingPatch
+  pendingPatch = {}
+  if (typeof window === 'undefined' || !window.api || !persistedBase || Object.keys(merged).length===0) return
+  persistedBase = {...persistedBase,...merged}
+  try { await window.api.saveData(persistedBase) }
+  catch(error) {
+    pendingPatch = {...merged,...pendingPatch}
+    throw error
+  }
 }
 
 function schedulePersist(playlists: Playlist[]): void {
@@ -111,7 +121,20 @@ export const usePlaylistStore = create<PlaylistState>()((set, get) => {
 
     addTrack: (playlistId, trackId) => mutate(playlistId, (p) => addTrackOp(p, trackId)),
 
+    addTracks: (playlistId, trackIds) => mutate(playlistId, (p) => ({ ...p, trackIds: [...new Set([...p.trackIds, ...trackIds])] })),
+    removeTracks: (playlistId, trackIds) => {
+      const removed = new Set(trackIds)
+      mutate(playlistId, (p) => ({ ...p, trackIds: p.trackIds.filter((id) => !removed.has(id)) }))
+    },
+
     removeTrack: (playlistId, index) => mutate(playlistId, (p) => removeTrackOp(p, index)),
+    moveTrack: (playlistId, trackId, offset) => mutate(playlistId, p => {
+      const from = p.trackIds.indexOf(trackId), to = from + offset
+      if (from < 0 || to < 0 || to >= p.trackIds.length) return p
+      const trackIds = [...p.trackIds]
+      trackIds.splice(to, 0, trackIds.splice(from, 1)[0])
+      return { ...p, trackIds }
+    }),
 
     setCover: (id, coverDataUrl) => mutate(id, (p) => ({ ...p, coverDataUrl })),
   }

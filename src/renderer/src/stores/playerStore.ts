@@ -32,7 +32,7 @@ export interface PlayerState {
   eqGains: number[] // 10 × dB
   playTracks: (tracks: Track[], startIndex: number) => void
   togglePlay: () => void
-  next: (opts?: { manual?: boolean }) => void
+  next: (opts?: { manual?: boolean; failed?: boolean }) => void
   prev: () => void
   seek: (sec: number) => void
   setVolume: (v: number) => void
@@ -45,6 +45,7 @@ export interface PlayerState {
   removeFromQueue: (position: number) => void // position внутри order
   moveInQueue: (fromPos: number, toPos: number) => void
   /** Внутренний триггер автокроссфейда — вызывается из timeupdate-подписки */
+  retryAlternative: () => boolean
   maybeStartCrossfade: () => void
 }
 
@@ -74,6 +75,13 @@ export function createPlayerStore(
     onReady: (url: string) => void,
     onFail: (e: unknown) => void,
   ): void => {
+    if (track.sourceId === 'direct' && typeof window !== 'undefined' && typeof window.api?.offlineResolve === 'function') {
+      window.api.offlineResolve(track.id).then(
+        path => onReady(resolveTrackUrl(path ? { ...track, filePath: path } : track)),
+        () => onReady(resolveTrackUrl(track)),
+      )
+      return
+    }
     if (
       track.sourceId === 'soundcloud' &&
       typeof window !== 'undefined' &&
@@ -85,6 +93,20 @@ export function createPlayerStore(
     }
   }
 
+  const saveDirectAfterPlay = (track: Track): void => {
+    if (track.sourceId === 'direct' && typeof window !== 'undefined') {
+      void window.api?.offlineAutoQueue?.(track).catch(error => console.warn('Automatic offline save failed:', error))
+    }
+  }
+
+  const loadTrack = (track: Track | undefined): void => {
+    if (!track) { engine.load(''); return }
+    resolvePlayableUrl(track,url => {
+      const current = get().queue[get().order[get().pos]]
+      if (current?.id === track.id) engine.load(url)
+    },() => engine.load(''))
+  }
+
   const playAt = (state: Pick<PlayerState, 'queue' | 'order' | 'next'>, pos: number): void => {
     const track = state.queue[state.order[pos]]
     // Ошибка резолва — как у мёртвого файла: пропускаем трек (auto-семантика next).
@@ -93,12 +115,12 @@ export function createPlayerStore(
       (url) => {
         // За время резолва пользователь мог переключить трек — не переигрываем
         const current = get().queue[get().order[get().pos]]
-        if (current?.id === track.id) engine.play(url)
+        if (current?.id === track.id) { engine.play(url); saveDirectAfterPlay(track) }
       },
       (e) => {
         console.error('soundcloud resolve failed, skipping:', e)
         const current = get().queue[get().order[get().pos]]
-        if (current?.id === track.id) state.next()
+        if (current?.id === track.id && !get().retryAlternative()) state.next({failed:true})
       },
     )
     // Статистика прослушиваний: пишем именно в точке реального старта трека
@@ -118,16 +140,27 @@ export function createPlayerStore(
         const current = get().queue[get().order[get().pos]]
         if (current?.id !== track.id) return
         engine.crossfadeTo?.(url, xfSec)
+        saveDirectAfterPlay(track)
       },
       (e) => {
         console.error('soundcloud resolve failed, skipping:', e)
         const current = get().queue[get().order[get().pos]]
-        if (current?.id === track.id) get().next()
+        if (current?.id === track.id && !get().retryAlternative()) get().next()
       },
     )
   }
 
   return {
+    retryAlternative: () => {
+      const state=get(), index=state.order[state.pos], current=state.queue[index]
+      const alternatives=current?.alternateSources ?? []
+      if(!alternatives.length)return false
+      const [next,...remaining]=alternatives
+      const queue=state.queue.map((t,i)=>i===index?{...next,alternateSources:remaining}:t)
+      set({queue,currentSec:0,playing:true})
+      playAt(get(),state.pos)
+      return true
+    },
     queue: [],
     order: [],
     pos: 0,
@@ -169,7 +202,7 @@ export function createPlayerStore(
       crossfadeDone = false
       // Ручной skip всегда двигается вперёд: repeat 'one' трактуем как 'all',
       // иначе nextIndex() вернул бы ту же позицию (см. review note).
-      const effectiveRepeat = opts?.manual && repeat === 'one' ? 'all' : repeat
+      const effectiveRepeat = opts?.failed ? 'off' : opts?.manual && repeat === 'one' ? 'all' : repeat
       const nextPos = nextIndex(order, pos, order[pos], effectiveRepeat)
       if (nextPos === null) {
         engine.pause()
@@ -250,7 +283,7 @@ export function createPlayerStore(
       if (queue.length === 0) {
         // Очередь была пуста: предзагружаем src (без autoplay), иначе
         // togglePlay() делал бы resume на пустом элементе — Play «играл» тишину
-        engine.load(resolveTrackUrl(track))
+        loadTrack(track)
         set({ pos: 0, currentSec: 0 })
       }
     },
@@ -298,8 +331,8 @@ export function createPlayerStore(
       const newOrder = identityOrder(newQueue.length)
       if (removedQueueIndex === playingQueueIndex) {
         engine.pause()
-        engine.load(newQueue.length > 0 ? resolveTrackUrl(newQueue[0]) : '')
         set({ queue: newQueue, order: newOrder, pos: 0, playing: false, currentSec: 0, shuffle: false })
+        loadTrack(newQueue[0])
       } else {
         const newPos = playingQueueIndex > removedQueueIndex ? playingQueueIndex - 1 : playingQueueIndex
         set({ queue: newQueue, order: newOrder, pos: newPos, shuffle: false })
@@ -450,8 +483,8 @@ export function initPlayerSubscriptions(
         if (!fromActiveDeck(e)) return
         // Файл удалён/перемещён: без обработчика плеер вечно «играет» мёртвый src,
         // а auto-advance умирает. Пропускаем трек с auto-семантикой (учитывает repeat).
-        console.error('audio error, skipping:', engine.element.currentSrc || engine.element.src)
-        store.getState().next()
+        console.error('audio source failed')
+        if (!store.getState().retryAlternative()) store.getState().next({failed:true})
       },
       { signal },
     )

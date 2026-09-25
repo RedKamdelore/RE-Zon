@@ -31,12 +31,27 @@ interface VkJsonAudio {
 }
 
 /**
- * Матчит URL редиректа после входа: m.vk.com/audio (или /audio*) —
- * неавторизованных VK сам уводит на login, после входа возвращает обратно.
+ * Матчит URL после входа. VK после логина редиректит на изначально
+ * запрошенную страницу (/audio) ИЛИ на /feed/id* (в т.ч. десктопный vk.com,
+ * если решил, что браузер не мобильный). Успех = любая авторизованная
+ * страница; формы логина/регистрации/2FA (/login?act=authcheck) — нет.
  */
 export function matchVkWebAuthUrl(url: string): boolean | null {
-  if (/^https:\/\/m\.vk\.com\/audio/.test(url)) return true
-  return null
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' || !/^(m\.)?vk\.(com|ru)$/.test(parsed.hostname)) return null
+    return /^\/(audio(?:s-?\d+)?|feed|id\d+|profile|im|menu|video)(?:\/|$)/.test(parsed.pathname) ? true : null
+  } catch {
+    return null
+  }
+}
+
+/** Проверяем cookie сессии на обоих доменах, включая мобильные хосты. */
+export function hasVkSessionCookie(cookies: Array<{ domain?: string; name: string; value: string }>): boolean {
+  return cookies.some((cookie) =>
+    /^\.?(m\.)?vk\.(com|ru)$/.test(cookie.domain ?? '') &&
+    cookie.name === 'remixsid' && cookie.value !== '' && cookie.value !== 'deleted',
+  )
 }
 
 /**
@@ -131,6 +146,9 @@ export async function fetchVkAudioListWith(
   for (let page = 0; page < maxPages; page++) {
     const { html, status } = await fetchVkAudioPageWith(fetcher, page * 2000)
     opts.onPage?.(html, page)
+    if (html.includes('BadBrowser__') || html.includes('Ваш браузер устарел')) {
+      throw new Error('VK отклонил версию браузера. Не удалось загрузить страницу аудиозаписей.')
+    }
     if (status !== 200 || vkPageLooksUnauthorized(html)) {
       return { tracks, unauthorized: true }
     }

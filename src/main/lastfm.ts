@@ -57,6 +57,7 @@ export async function lastfmApiWith(
   }
   const body = (await res.json().catch(() => ({}))) as LfmErrorBody
   if (isRegionBlock(res.status, body)) throw new Error(REGION_BLOCK_MESSAGE)
+  if (res.status < 200 || res.status >= 300) throw new Error(`Last.fm: HTTP ${res.status} — сервер отклонил запрос; проверьте подключение и прокси`)
   if (res.status < 200 || res.status >= 300) throw new Error(`Last.fm: HTTP ${res.status}`)
   // Last.fm отвечает 200 даже на ошибки API — смотрим поле error
   if (typeof body.error === 'number') {
@@ -95,7 +96,7 @@ export function lfmSignature(
   params: Record<string, string | number>,
   secret: string,
 ): string {
-  const keys = Object.keys(params).filter((k) => k !== 'format' && k !== 'signature').sort()
+  const keys = Object.keys(params).filter((k) => k !== 'format' && k !== 'signature' && k !== 'api_sig').sort()
   const raw = keys.map((k) => `${k}${params[k]}`).join('') + secret
   return createHash('md5').update(raw, 'utf8').digest('hex')
 }
@@ -122,7 +123,7 @@ interface LfmScrobbleResponse {
 
 function lfmPostBody(params: Record<string, string | number>, apiKey: string, secret: string, sk: string): string {
   const signed: Record<string, string | number> = { ...params, api_key: apiKey, sk, format: 'json' }
-  signed.signature = lfmSignature(signed, secret)
+  signed.api_sig = lfmSignature(signed, secret)
   return [...Object.entries(signed)].map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')
 }
 
@@ -175,7 +176,7 @@ export async function lfmGetSessionWith(
   const signature = lfmSignature({ ...params, api_key: apiKey }, secret)
   const qs =
     `?method=auth.getSession&token=${encodeURIComponent(token)}` +
-    `&api_key=${encodeURIComponent(apiKey)}&format=json&signature=${signature}`
+    `&api_key=${encodeURIComponent(apiKey)}&format=json&api_sig=${signature}`
   const res = await deps.requester(`https://ws.audioscrobbler.com/2.0/${qs}`, proxyUrl)
   const body = (await res.json().catch(() => ({}))) as {
     session?: { key?: string; name?: string }
@@ -191,9 +192,11 @@ export async function lfmGetSessionWith(
   return { key, username: body.session?.name ?? '' }
 }
 
+export const LFM_CALLBACK = 'http://127.0.0.1:8889/lastfm/callback'
+
 /** URL окна авторизации Last.fm: пользователь логинится → отдаёт token в URL */
 export function lfmAuthUrl(apiKey: string): string {
-  return `https://www.last.fm/api/auth?api_key=${encodeURIComponent(apiKey)}`
+  return `https://www.last.fm/api/auth/?api_key=${encodeURIComponent(apiKey.trim())}&cb=${encodeURIComponent(LFM_CALLBACK)}`
 }
 
 /**
@@ -201,11 +204,13 @@ export function lfmAuthUrl(apiKey: string): string {
  * (callback не задан — падаем на дефолтную страницу с токеном в query).
  */
 export function matchLfmAuthUrl(url: string): string | null {
-  if (!url.startsWith('http://www.last.fm/api/auth/') && !url.startsWith('https://www.last.fm/api/auth/')) {
-    return null
-  }
-  const token = new URLSearchParams(url.split('?')[1] ?? '').get('token')
-  return token ?? null
+  let parsed: URL
+  try { parsed = new URL(url) } catch { return null }
+  const callback = new URL(LFM_CALLBACK)
+  const local = parsed.origin === callback.origin && parsed.pathname === callback.pathname
+  const legacy = ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname === 'www.last.fm' && parsed.pathname === '/api/auth/'
+  if (!local && !legacy) return null
+  return parsed.searchParams.get('token') || null
 }
 
 // --- Реальные транспорты для скробблинга/сессии ------------------------------

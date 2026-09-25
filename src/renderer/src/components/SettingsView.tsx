@@ -1,20 +1,28 @@
-import { useRef, useState } from 'react'
+import {useNavStore} from '../stores/navStore'
+import { useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { getPersistedBase } from '../stores/playlistStore'
 import type { PanelMaterial, BackgroundKind } from '@shared/themeModel'
 import { CloseIcon } from './icons'
 import ImportSection from './ImportSection'
+import UpdatesSettings from './UpdatesSettings'
+import DataSettings from './DataSettings'
+import DownloadsSettings from './DownloadsSettings'
 
 const BUILTIN_SKINS: { id: string; name: string; gradient: string }[] = [
-  { id: 'spotify-dark', name: 'Spotify Dark', gradient: 'linear-gradient(135deg, #121212 60%, #1DB954)' },
+  { id: 'atlas', name: 'Атлас', gradient: 'linear-gradient(135deg, #20242A 60%, #D9996F)' },
+  { id: 'north', name: 'Север', gradient: 'linear-gradient(135deg, #20242A 60%, #82B7C7)' },
+  { id: 'paper', name: 'Тихий свет', gradient: 'linear-gradient(135deg, #F5F3EF 60%, #A65338)' },
+  { id: 'night-record', name: 'Ночная запись', gradient: 'linear-gradient(135deg, #101318 60%, #A9A4D6)' },
+  { id: 'spotify-dark', name: 'Классическая тёмная', gradient: 'linear-gradient(135deg, #121212 60%, #1DB954)' },
   { id: 'light', name: 'Светлая', gradient: 'linear-gradient(135deg, #f5f5f5 60%, #1DB954)' },
   { id: 'midnight', name: 'Midnight', gradient: 'linear-gradient(135deg, #0b1026 60%, #8B5CF6)' },
   { id: 'frutiger-aero', name: 'Frutiger Aero', gradient: 'linear-gradient(135deg, #7ec8e3, #a8e063)' },
   { id: 'liquid-glass', name: 'Liquid Glass', gradient: 'linear-gradient(135deg, #89f7fe, #66a6ff)' },
 ]
 
-const ACCENT_PRESETS = ['#1DB954', '#8B5CF6', '#F59E0B', '#EF4444', '#3B82F6', '#EC4899']
+const ACCENT_PRESETS = ['#D9996F', '#82B7C7', '#A9A4D6', '#E7BC71', '#E18F87', '#1DB954']
 
 const MATERIALS: { id: PanelMaterial; name: string }[] = [
   { id: 'flat', name: 'Плоский' },
@@ -28,6 +36,18 @@ const BG_KINDS: { id: BackgroundKind; name: string }[] = [
   { id: 'gradient', name: 'Градиент' },
   { id: 'image', name: 'Картинка' },
 ]
+
+const SETTINGS_PAGES = [
+  { id: 'data', title: 'Данные приложения', description: 'Хранение профиля и сброс настроек и аккаунтов' },
+  { id: 'downloads', title: 'Загрузки', description: 'Музыка, сохранённая для прослушивания без интернета' },
+  { id: 'updates', title: 'Обновления', description: 'Версия приложения, канал выпусков и установка обновлений' },
+  { id: 'appearance', title: 'Внешний вид', description: 'Темы, материалы панелей и оформление интерфейса' },
+  { id: 'background', title: 'Фон и цвета', description: 'Фон приложения, палитра и акцентный цвет' },
+  { id: 'playback', title: 'Воспроизведение', description: 'Параметры прослушивания музыки' },
+  { id: 'integrations', title: 'Сервисы и импорт', description: 'Подключение аккаунтов и загрузка музыкальной коллекции' },
+  { id: 'folders', title: 'Папки с музыкой', description: 'Локальные источники вашей медиатеки' },
+  { id: 'hidden', title: 'Скрытые треки', description: 'Возвращение удалённых из медиатеки треков' },
+] as const
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
@@ -58,6 +78,12 @@ function SliderRow(props: {
 }
 
 export default function SettingsView() {
+  const view=useNavStore(s=>s.view)
+  const targetPage=view.name==='settings'?view.page:undefined
+  const [page, setPage] = useState<string>(targetPage ?? 'appearance')
+  useEffect(()=>{if(targetPage)setPage(targetPage)},[targetPage])
+  const currentPage = SETTINGS_PAGES.find(item => item.id === page)!
+  const contentRef = useRef<HTMLDivElement>(null)
   const appearance = useSettingsStore((s) => s.appearance)
   const playback = useSettingsStore((s) => s.playback)
   const loading = useLibraryStore((s) => s.loading)
@@ -114,20 +140,32 @@ export default function SettingsView() {
   }
 
   return (
-    <>
-      <h1>Настройки</h1>
+    <div className="settings-workspace">
+      <header className="settings-heading"><h1>Настройки</h1><span className="muted">Re:Zon</span></header>
+      <div className="settings-layout">
+        <nav className="settings-navigation" aria-label="Разделы настроек">
+          {SETTINGS_PAGES.map(item => <button key={item.id} className={page === item.id ? 'active' : ''}
+            aria-current={page === item.id ? 'page' : undefined} aria-controls="settings-content"
+            onClick={() => { setPage(item.id); contentRef.current?.scrollTo(0, 0) }}>{item.title}</button>)}
+          <p>Изменения сохраняются автоматически</p>
+        </nav>
+        <div className="settings-content" id="settings-content" ref={contentRef}>
+          <header className="settings-page-heading"><h2>{currentPage.title}</h2><p className="muted">{currentPage.description}</p></header>
+          {page === 'updates' && <UpdatesSettings />}
+          {page === 'data' && <DataSettings />}
+          {page === 'downloads' && <DownloadsSettings />}
 
-      <section className="settings-section">
-        <h2>Внешний вид</h2>
+      <section className="settings-section" hidden={page !== 'appearance'}>
+        <div className="section-heading"><h2>Ваше пространство</h2><button className="text-button" onClick={() => s().setSkin('atlas')}>Вернуться к Атласу</button></div>
         <div className="settings-label">Тема</div>
         <div className="skin-row">
-          {BUILTIN_SKINS.map((skin) => (
+          {BUILTIN_SKINS.slice(0,4).map((skin) => (
             <button
               key={skin.id}
               className={`skin-card${appearance.skin === skin.id ? ' active' : ''}`}
               onClick={() => s().setSkin(skin.id)}
             >
-              <span className="skin-swatch" style={{ background: skin.gradient }} />
+              <span className="skin-swatch" style={{ background: skin.gradient }}><i/><b/><em/></span>
               <span className="skin-name">{skin.name}</span>
             </button>
           ))}
@@ -179,6 +217,8 @@ export default function SettingsView() {
           )}
         </div>
 
+        <details className="advanced-appearance"><summary>Тонкая настройка поверхности</summary>
+        <label className="settings-label">Классические темы <select aria-label="Классические темы" value={BUILTIN_SKINS.slice(4).some(t=>t.id===appearance.skin)?appearance.skin:''} onChange={e=>s().setSkin(e.target.value)}><option value="" disabled>Выбрать сохранённый стиль</option>{BUILTIN_SKINS.slice(4).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
         <div className="settings-label">Материал панелей</div>
         <div className="eq-presets theme-btn-row">
           {MATERIALS.map((m) => (
@@ -242,7 +282,11 @@ export default function SettingsView() {
           />
         )}
 
-        <div className="settings-label">Фон</div>
+        </details>
+        </section>
+      <section className="settings-section" hidden={page !== 'background'}>
+        <h2>Фон приложения</h2>
+        <div className="settings-label">Тип фона</div>
         <div className="eq-presets theme-btn-row">
           {BG_KINDS.map((k) => (
             <button
@@ -414,7 +458,7 @@ export default function SettingsView() {
         />
       </section>
 
-      <section className="settings-section">
+      <section className="settings-section" hidden={page !== 'playback'}>
         <h2>Воспроизведение</h2>
         <div className="settings-label">
           Кроссфейдер: {playback.crossfadeSec === 0 ? 'Выкл' : `${playback.crossfadeSec} сек`}
@@ -431,9 +475,9 @@ export default function SettingsView() {
         />
       </section>
 
-      <ImportSection />
+      <div hidden={page !== 'integrations'}><ImportSection /></div>
 
-      <section className="settings-section">
+      <section className="settings-section" hidden={page !== 'folders'}>
         <h2>Источники</h2>
         {folders.length === 0 ? (
           <p className="muted">Папки с музыкой не добавлены</p>
@@ -461,7 +505,7 @@ export default function SettingsView() {
         </button>
       </section>
 
-      <section className="settings-section">
+      <section className="settings-section" hidden={page !== 'hidden'}>
         <h2>
           Скрытые треки
           {hiddenTracks.length > 0 && <span className="muted"> ({hiddenTracks.length})</span>}
@@ -486,6 +530,8 @@ export default function SettingsView() {
           </ul>
         )}
       </section>
-    </>
+        </div>
+      </div>
+    </div>
   )
 }

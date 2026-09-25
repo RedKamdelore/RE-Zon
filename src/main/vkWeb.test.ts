@@ -3,6 +3,7 @@ import {
   vkParseAudioPage,
   vkPageLooksUnauthorized,
   matchVkWebAuthUrl,
+  hasVkSessionCookie,
   fetchVkAudioListWith,
   type VkWebFetcher,
 } from './vkWeb'
@@ -84,17 +85,66 @@ describe('vkPageLooksUnauthorized', () => {
 })
 
 describe('matchVkWebAuthUrl', () => {
+  it('accepts mobile and desktop vk.ru redirects after login', () => {
+    for (const host of ['vk.ru', 'm.vk.ru']) {
+      for (const path of ['/feed', '/audio', '/audios12345', '/id12345', '/im']) {
+        expect(matchVkWebAuthUrl(`https://${host}${path}`)).toBe(true)
+      }
+      expect(matchVkWebAuthUrl(`https://${host}/login?act=authcheck`)).toBeNull()
+    }
+  })
+  it('rejects lookalike hosts and path prefixes', () => {
+    for (const url of ['https://vk.ru.example.com/feed', 'https://vk.ru@evil.com/feed', 'https://vk.ru/feedback', 'https://vk.com/audio-login', 'http://vk.ru/feed']) {
+      expect(matchVkWebAuthUrl(url)).toBeNull()
+    }
+  })
   it('matches m.vk.com/audio after login redirect', () => {
     expect(matchVkWebAuthUrl('https://m.vk.com/audio')).toBe(true)
     expect(matchVkWebAuthUrl('https://m.vk.com/audio?from=login')).toBe(true)
   })
-  it('login/other pages do not match', () => {
+  it('matches feed/profile after login (VK redirects to /feed)', () => {
+    expect(matchVkWebAuthUrl('https://m.vk.com/feed')).toBe(true)
+    expect(matchVkWebAuthUrl('https://vk.com/feed')).toBe(true)
+    expect(matchVkWebAuthUrl('https://m.vk.com/id12345')).toBe(true)
+    expect(matchVkWebAuthUrl('https://vk.com/id12345')).toBe(true)
+    expect(matchVkWebAuthUrl('https://m.vk.com/audios12345')).toBe(true)
+  })
+  it('login/2fa/other pages do not match', () => {
     expect(matchVkWebAuthUrl('https://m.vk.com/login?u=1')).toBeNull()
-    expect(matchVkWebAuthUrl('https://vk.com/feed')).toBeNull()
+    expect(matchVkWebAuthUrl('https://m.vk.com/login?act=authcheck')).toBeNull()
+    expect(matchVkWebAuthUrl('https://vk.com/join')).toBeNull()
+  })
+  it('non-vk urls do not match', () => {
+    expect(matchVkWebAuthUrl('https://example.com/feed')).toBeNull()
+    expect(matchVkWebAuthUrl('about:blank')).toBeNull()
+  })
+})
+
+describe('hasVkSessionCookie', () => {
+  it('recognizes sessions on both VK domains and mobile hosts', () => {
+    for (const domain of ['.vk.ru', 'vk.ru', '.vk.com', 'm.vk.ru', '.m.vk.com']) {
+      expect(hasVkSessionCookie([{ domain, name: 'remixsid', value: 'session' }])).toBe(true)
+    }
+  })
+  it('rejects deleted sessions, unrelated cookies and lookalike domains', () => {
+    for (const cookie of [
+      { domain: '.vk.ru', name: 'remixsid', value: '' },
+      { domain: '.vk.ru', name: 'remixsid', value: 'deleted' },
+      { domain: '.vk.ru', name: 'remixlang', value: 'session' },
+      { domain: '.vk.ru.example.com', name: 'remixsid', value: 'session' },
+    ]) expect(hasVkSessionCookie([cookie])).toBe(false)
+    expect(hasVkSessionCookie([])).toBe(false)
   })
 })
 
 describe('fetchVkAudioListWith', () => {
+  it('reports the unsupported-browser page instead of treating it as an empty library', async () => {
+    const fetcher: VkWebFetcher = async () => ({
+      status: 200,
+      html: '<div class="BadBrowser__browsers">Ваш браузер устарел</div>',
+    })
+    await expect(fetchVkAudioListWith(fetcher)).rejects.toThrow('VK отклонил версию браузера')
+  })
   function pageFetcher(pages: string[], onPage?: (url: string) => void): VkWebFetcher {
     let call = 0
     return vi.fn(async (url: string) => {

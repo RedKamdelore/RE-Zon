@@ -1,0 +1,51 @@
+name: Windows release
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - name: Verify tag matches application version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag must match package.json version' }
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReZon-Windows
+          path: |
+            release/*/ReZon-Setup-*.exe
+            release/*/*.blockmap
+            release/*/beta.yml
+            release/*/latest.yml
+            release/*/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Create draft release for a version tag
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          $releaseArgs = @('release', 'create', $tag, '--draft', '--verify-tag', '--title', "Re:Zon $version", '--generate-notes')
+          if ($version -match '-beta\.') { $releaseArgs += '--prerelease' }
+          gh @releaseArgs
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create release draft' }
+          $assets = Get-ChildItem -LiteralPath "release/$version" -File | Where-Object { $_.Extension -in '.exe','.blockmap' -or $_.Name -in 'beta.yml','latest.yml','SHA256SUMS.txt' }
+          gh release upload $tag @($assets.FullName)
+          if ($LASTEXITCODE -ne 0) { throw 'Could not upload release assets' }

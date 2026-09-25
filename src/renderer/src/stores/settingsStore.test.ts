@@ -91,7 +91,7 @@ describe('settingsStore', () => {
 
   it('setSkin with unknown id is a no-op', () => {
     useSettingsStore.getState().setSkin('no-such')
-    expect(useSettingsStore.getState().appearance.skin).toBe('spotify-dark')
+    expect(useSettingsStore.getState().appearance.skin).toBe('atlas')
   })
 
   it('patchTheme mutates active theme, applies CSS live and persists', () => {
@@ -157,7 +157,7 @@ describe('settingsStore', () => {
     s.deleteCustomTheme('Временная')
     const a = useSettingsStore.getState().appearance
     expect(a.customThemes['Временная']).toBeUndefined()
-    expect(a.skin).toBe('spotify-dark')
+    expect(a.skin).toBe('atlas')
     expect(a.theme).toEqual(defaultTheme())
   })
 

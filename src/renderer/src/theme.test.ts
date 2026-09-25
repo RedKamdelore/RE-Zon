@@ -23,7 +23,7 @@ describe('applyTheme', () => {
     expect(el).not.toBeNull()
     expect(el.tagName).toBe('STYLE')
     expect(el.textContent).toBe(themeToCss(defaultTheme()))
-    expect(el.textContent).toContain('--bg-app: #121212')
+    expect(el.textContent).toContain('--bg-app: #171A1E')
   })
 
   it('replaces previous style on re-apply (no duplicates)', () => {
@@ -57,8 +57,8 @@ describe('applyScale', () => {
 })
 
 describe('DEFAULT_APPEARANCE', () => {
-  it('is spotify-dark preset with default theme', () => {
-    expect(DEFAULT_APPEARANCE.skin).toBe('spotify-dark')
+  it('is Atlas preset with default theme', () => {
+    expect(DEFAULT_APPEARANCE.skin).toBe('atlas')
     expect(DEFAULT_APPEARANCE.theme).toEqual(defaultTheme())
     expect(DEFAULT_APPEARANCE.customThemes).toEqual({})
     expect(DEFAULT_APPEARANCE.scale).toBe(1)

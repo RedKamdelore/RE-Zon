@@ -22,7 +22,7 @@ describe('mergeWithDefaults', () => {
     expect(d.connections).toEqual({})
     expect(d.lastfmApiSecret).toBe('')
     expect(d.appearance).toEqual({
-      skin: 'spotify-dark',
+      skin: 'atlas',
       theme: defaultTheme(),
       customThemes: {},
       scale: 1,
@@ -235,4 +235,9 @@ describe('migrateV3toV4', () => {
     const r = migrateV3toV4({ version: 3, connections: conns })
     expect(r.connections).toEqual(conns)
   })
+})
+
+it('preserves an existing v3 theme when migrating account settings',()=>{
+ const appearance={...DEFAULT_DATA.appearance,theme:{...defaultTheme(),accent:'#123456'}}
+ expect(mergeWithDefaults({...DEFAULT_DATA,version:3,appearance}).appearance).toEqual(appearance)
 })

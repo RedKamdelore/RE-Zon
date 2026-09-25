@@ -61,6 +61,9 @@ describe('blendOver', () => {
 })
 
 describe('contrastRatio / ensureContrast', () => {
+  it('chooses black on middle gray when white cannot reach AA contrast', () => {
+    expect(contrastRatio(ensureContrast('#ffffff', '#888888'), '#888888')).toBeGreaterThanOrEqual(4.5)
+  })
   it('black on white is 21, same color is 1', () => {
     expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 0)
     expect(contrastRatio('#ffffff', '#ffffff')).toBeCloseTo(1, 0)
@@ -89,15 +92,15 @@ describe('contrastRatio / ensureContrast', () => {
 })
 
 describe('defaultTheme', () => {
-  it('is sane spotify-dark equivalent', () => {
+  it('uses the Atlas palette', () => {
     const t = defaultTheme()
-    expect(t.bgApp).toBe('#121212')
-    expect(t.bgPanel).toBe('#000000')
-    expect(t.textPrimary).toBe('#ffffff')
-    expect(t.accent).toBe('#1DB954')
+    expect(t.bgApp).toBe('#171A1E')
+    expect(t.bgPanel).toBe('#20242A')
+    expect(t.textPrimary).toBe('#F3F0E9')
+    expect(t.accent).toBe('#D9996F')
     expect(t.panelMaterial).toBe('flat')
     expect(t.background).toBe('color')
-    expect(t.radius).toBe(8)
+    expect(t.radius).toBe(14)
     expect(t.bgImageDataUrl).toBeUndefined()
   })
   it('returns a fresh copy each call', () => {
@@ -107,17 +110,17 @@ describe('defaultTheme', () => {
 })
 
 describe('BUILTIN_PRESETS', () => {
-  it('contains the 5 former skins', () => {
+  it('retains legacy presets alongside four Atlas presets', () => {
     expect(Object.keys(BUILTIN_PRESETS).sort()).toEqual(
-      ['frutiger-aero', 'light', 'liquid-glass', 'midnight', 'spotify-dark'].sort(),
+      ['atlas', 'north', 'paper', 'night-record', 'frutiger-aero', 'light', 'liquid-glass', 'midnight', 'spotify-dark'].sort(),
     )
   })
   it('presets differ from each other', () => {
     const css = Object.values(BUILTIN_PRESETS).map(themeToCss)
-    expect(new Set(css).size).toBe(5)
+    expect(new Set(css).size).toBe(9)
   })
-  it('spotify-dark preset equals defaultTheme', () => {
-    expect(BUILTIN_PRESETS['spotify-dark']).toEqual(defaultTheme())
+  it('Atlas is the default while legacy colors remain available', () => {
+    expect(BUILTIN_PRESETS.atlas).toEqual(defaultTheme()); expect(BUILTIN_PRESETS['spotify-dark'].accent).toBe('#1DB954')
   })
   it('frutiger-aero is gloss on a gradient, liquid-glass is glass', () => {
     expect(BUILTIN_PRESETS['frutiger-aero'].panelMaterial).toBe('gloss')
@@ -131,15 +134,15 @@ describe('themeToCss', () => {
     const css = themeToCss(defaultTheme())
     expect(css).toContain(':root')
     for (const token of [
-      '--bg-app: #121212',
-      '--bg-panel: #000000',
+      '--bg-app: #171A1E',
+      '--bg-panel: #20242A',
       '--bg-tile',
       '--bg-tile-hover',
-      '--text-primary: #ffffff',
-      '--text-secondary: #b3b3b3',
-      '--accent: #1DB954',
+      '--text-primary: #f3f0e9',
+      '--text-secondary: #b8b7b2',
+      '--accent: #D9996F',
       '--accent-hover',
-      '--radius-card: 8px',
+      '--radius-card: 14px',
       '--slider-track',
       '--slider-thumb',
       '--border-subtle',
@@ -170,12 +173,12 @@ describe('themeToCss', () => {
   it('glass material emits backdrop-filter blur+saturate and translucent panel', () => {
     const css = themeToCss({ ...defaultTheme(), panelMaterial: 'glass', glassBlur: 24, panelOpacity: 0.3 })
     expect(css).toContain('backdrop-filter: blur(24px) saturate(170%)')
-    expect(css).toContain('--bg-panel: rgba(0, 0, 0, 0.3)')
+    expect(css).toContain('--bg-panel: rgba(32, 36, 42, 0.3)')
     expect(css).toContain('border: 1px solid rgba(255, 255, 255')
   })
-  it('glass playerbar is materialized (fixed: playerbar was always flat)', () => {
+  it('glass is applied to semantic material surfaces', () => {
     const css = themeToCss({ ...defaultTheme(), panelMaterial: 'glass' })
-    expect(css).toMatch(/\.sidebar-card, [^{]*\.playerbar \{/)
+    expect(css).toMatch(/\.material-surface, [^{]*\.app\.mini \{/)
   })
   it('flat material has no backdrop-filter but has hairline border + ambient shadow', () => {
     const css = themeToCss(defaultTheme())
@@ -183,11 +186,13 @@ describe('themeToCss', () => {
     expect(css).toContain('border: 1px solid var(--border-subtle)')
     expect(css).toMatch(/box-shadow: 0 1px 2px rgba\(0, 0, 0, [\d.]+\), 0 8px 24px rgba\(0, 0, 0, [\d.]+\)/)
   })
-  it('gloss material emits specular ::before glint scaled by intensity', () => {
+  it('gloss keeps its glint behind content without repositioning panels', () => {
     const css = themeToCss({ ...defaultTheme(), panelMaterial: 'gloss', glossIntensity: 0.5, panelOpacity: 0.4 })
-    expect(css).toContain('::before')
-    expect(css).toContain('linear-gradient(')
-    expect(css).toContain('rgba(255, 255, 255, 0.275)') // 0.5 * 0.55
+    expect(css).toContain('background-image: linear-gradient(')
+    expect(css).not.toContain('::before')
+    expect(css).not.toContain('position:')
+    expect(css).not.toContain('inset: 0')
+    expect(css).toContain('rgba(255, 255, 255, 0.040)') // тёмные панели: блик не засвечивает текст
     expect(css).toMatch(/\.pl-play, \.tile-play, \.play-btn \{/) // хромированные кнопки
   })
   it('neumorphic material emits double shadow scaled by strength (no pure white)', () => {
@@ -270,4 +275,3 @@ describe('themeToCss', () => {
     expect(rootBlock).not.toContain('data:image')
   })
 })
-

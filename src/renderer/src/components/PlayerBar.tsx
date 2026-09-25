@@ -1,3 +1,4 @@
+import Artwork from './Artwork'
 import type { CSSProperties } from 'react'
 import { usePlayerStore } from '../stores/playerStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
@@ -60,15 +61,12 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
   }
 
   return (
-    <footer className="playerbar">
+    <section className="playerbar" aria-label="Управление воспроизведением">
       <div className="pb-left">
         <div className="pb-cover">
-          {track?.coverDataUrl ? (
-            <img src={track.coverDataUrl} alt="" />
-          ) : (
-            <MusicNoteIcon size={24} />
-          )}
+          {track ? <Artwork src={track.coverDataUrl} artist={track.artist} album={track.album}/> : <MusicNoteIcon size={24}/> }
         </div>
+        {!track && <div className="pb-track-info"><div className="pb-title">Здесь начинается музыка</div><div className="pb-artist">Выберите запись в коллекции</div></div>}
         {track && (
           <div className="pb-track-info">
             <div className="pb-title">{track.title}</div>
@@ -101,27 +99,34 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
           <button
             className={`icon-btn${shuffle ? ' active' : ''}`}
             title="Перемешать"
+            aria-label="Перемешать"
+            aria-pressed={shuffle}
+            disabled={disabled}
             onClick={toggleShuffle}
           >
             <ShuffleIcon size={18} />
           </button>
-          <button className="icon-btn" title="Назад" onClick={prev}>
+          <button className="icon-btn" title="Предыдущий трек" aria-label="Предыдущий трек" disabled={disabled} onClick={prev}>
             <PrevIcon size={20} />
           </button>
           <button
             className="play-btn"
             title={playing ? 'Пауза' : 'Слушать'}
+            aria-label={playing ? 'Пауза' : 'Слушать'}
+            disabled={disabled}
             onClick={togglePlay}
           >
             {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
           </button>
-          <button className="icon-btn" title="Вперёд" onClick={() => next({ manual: true })}>
+          <button className="icon-btn" title="Следующий трек" aria-label="Следующий трек" disabled={disabled} onClick={() => next({ manual: true })}>
             <NextIcon size={20} />
           </button>
           <span className="repeat-wrap">
             <button
               className={`icon-btn${repeat !== 'off' ? ' active' : ''}`}
               title={repeat === 'one' ? 'Повтор одного' : repeat === 'all' ? 'Повтор всего' : 'Без повтора'}
+              aria-label={repeat === 'one' ? 'Повтор одного' : repeat === 'all' ? 'Повтор всего' : 'Без повтора'}
+              disabled={disabled}
               onClick={cycleRepeat}
             >
               <RepeatIcon size={18} />
@@ -133,6 +138,9 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
           <span>{fmt(currentSec)}</span>
           <input
             className="slider"
+            aria-label="Позиция воспроизведения"
+            aria-valuetext={`${fmt(currentSec)} из ${fmt(track?.durationSec ?? 0)}`}
+            disabled={!track?.durationSec}
             type="range"
             min={0}
             max={track?.durationSec ?? 0}
@@ -169,8 +177,9 @@ export default function PlayerBar({ onTogglePanel }: PlayerBarProps) {
           style={progressStyle(volume, 1)}
           onChange={(e) => changeVolume(Number(e.target.value))}
           title="Громкость"
+          aria-label="Громкость"
         />
       </div>
-    </footer>
+    </section>
   )
 }
