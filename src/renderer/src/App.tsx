@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import CommandBar from './components/CommandBar'
-import ListeningContext from './components/ListeningContext'
 import SearchPalette from './components/SearchPalette'
 import SourcesView from './components/SourcesView'
 import UpdateNotice from './components/UpdateNotice'
@@ -38,7 +37,17 @@ export default function App() {
   const mainRef=useRef<HTMLElement>(null)
   const savedScroll=useRef(0)
   const wasFullPlayer=useRef(false)
+  const lastView=useRef(view)
   useEffect(()=>{if(mainRef.current)mainRef.current.scrollTop=0},[view])
+  useEffect(()=>{
+    if(lastView.current!==view){
+      lastView.current=view
+      if(useWorkspaceStore.getState().fullPlayerOpen){
+        savedScroll.current=0
+        useWorkspaceStore.getState().closeFullPlayer()
+      }
+    }
+  },[view])
   const setView = useNavStore((s) => s.setView)
   const playlists = usePlaylistStore((s) => s.playlists)
   const tracks = useLibraryStore(visibleTracks)
@@ -90,11 +99,7 @@ export default function App() {
     return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh)}
   }, [])
 
-  // Правая панель: очередь / текст / эквалайзер (Task 12–13);
-  // повторный клик по активной кнопке закрывает панель, 'mini' — мини-плеер
-  const sessionOpen = useWorkspaceStore(s => s.sessionOpen)
   const fullPlayerOpen = useWorkspaceStore(s => s.fullPlayerOpen)
-  const pinned = useWorkspaceStore(s => s.pinned)
   const searchOpen = useWorkspaceStore(s => s.searchOpen)
   const [mini, setMini] = useState(false)
 
@@ -152,7 +157,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app${sessionOpen && !fullPlayerOpen ? ' session-open' : ''}${pinned && !fullPlayerOpen ? ' session-pinned' : ''}`}>
+    <div className="app">
       <Sidebar view={view} onNavigate={setView} />
       <CommandBar />
       <UpdateNotice />
@@ -181,7 +186,6 @@ export default function App() {
         {view.name === 'radio' && <RadioView trackId={view.trackId} />}
         </>}
       </main>
-      {sessionOpen && !fullPlayerOpen && <ListeningContext onMini={() => void setMiniMode(true)} />}
       {searchOpen && <SearchPalette />}
     </div>
   )

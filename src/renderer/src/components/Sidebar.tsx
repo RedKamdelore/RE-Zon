@@ -3,7 +3,7 @@ import { useWorkspaceStore } from '../stores/workspaceStore'
 import { AtlasIcon } from './AtlasIcon'
 import BrandMark from './BrandMark'
 export default function Sidebar({ view, onNavigate }: { view: View; onNavigate: (view: View) => void }) {
-  const open = useWorkspaceStore(s => s.sessionOpen)
+  const open = useWorkspaceStore(s => s.fullPlayerOpen)
   const collection = ['library', 'playlist', 'album', 'artist', 'favorites', 'radio'].includes(view.name)
   const item = (label: string, icon: string, target: View, active: boolean) => <button className={'rail-item'+(active ? ' active' : '')} aria-label={label} aria-current={active ? 'page' : undefined} title={label} onClick={() => onNavigate(target)}><AtlasIcon name={icon}/><span>{label}</span></button>
   return <nav className="nav-rail" aria-label="Навигация ReZon">
@@ -16,7 +16,7 @@ export default function Sidebar({ view, onNavigate }: { view: View; onNavigate: 
       {item('Источники', 'sources', { name: 'sources' }, view.name === 'sources' || view.name === 'service')}
     </div>
     <div className="rail-bottom">
-      <button className={'rail-item'+(open ? ' active' : '')} aria-label="Сеанс" aria-expanded={open} title="Сеанс прослушивания" onClick={() => useWorkspaceStore.getState().toggleSession()}><AtlasIcon name="wave"/><span>Сеанс</span></button>
+      <button className={'rail-item'+(open ? ' active' : '')} aria-label="Плеер" aria-expanded={open} title="Большой плеер" onClick={() => open ? useWorkspaceStore.getState().closeFullPlayer() : useWorkspaceStore.getState().openFullPlayer()}><AtlasIcon name="wave"/><span>Плеер</span></button>
       {item('Настройки', 'settings', { name: 'settings' }, view.name === 'settings')}
     </div>
   </nav>

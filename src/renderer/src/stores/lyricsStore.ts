@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persistPatch } from './playlistStore'
 import type { Track } from '@shared/types'
 import type { LyricsLookupResult } from '@shared/lyricsLookup'
+import { parseLrc } from '@shared/lyrics'
 
 interface LyricsState {
   overrides: Record<string, string> // trackId → текст из редактора
@@ -39,13 +40,14 @@ function readAutomaticCache(): Record<string, LyricsLookupResult | null> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
     return Object.fromEntries(Object.entries(value).filter(([, entry]) => {
       const lyric = entry as Partial<LyricsLookupResult> | null
-      return lyric?.source === 'lrclib' && typeof lyric.text === 'string' && lyric.text.length <= 50_000
+      // Old plain-only cache entries must be retried after new synchronized sources are added.
+      return (lyric?.source === 'lrclib' || lyric?.source === 'lrcapi') && lyric.synced === true && typeof lyric.text === 'string' && lyric.text.length <= 50_000 && parseLrc(lyric.text).some(line => !!line.text)
     })) as Record<string, LyricsLookupResult | null>
   } catch { return {} }
 }
 function saveAutomaticCache(values: Record<string, LyricsLookupResult | null>): void {
   try {
-    const successful = Object.entries(values).filter(([, value]) => !!value && value.text.length <= 50_000).slice(-80)
+    const successful = Object.entries(values).filter(([, value]) => !!value?.synced && value.text.length <= 50_000).slice(-80)
     localStorage.setItem('rezon-automatic-lyrics', JSON.stringify(Object.fromEntries(successful)))
   } catch { /* Lyrics still work for this session when storage is full. */ }
 }

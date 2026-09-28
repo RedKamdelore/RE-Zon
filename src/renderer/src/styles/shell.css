@@ -32,14 +32,6 @@
 .transport-toggle{border:1px solid var(--border-subtle);width:33px;height:33px;color:var(--text-primary)}
 .main{grid-column:2;grid-row:2;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;padding:34px 38px 20px;container-type:inline-size;scrollbar-gutter:stable}
 .main>section,.main>.settings-workspace{max-width:1500px;margin-left:auto;margin-right:auto}
-.listening-context{position:absolute;z-index:20;top:76px;bottom:0;right:0;width:360px;display:flex;flex-direction:column;border-left:1px solid var(--border-subtle);border-radius:0!important;box-shadow:-20px 0 60px #0003!important;animation:session-enter 180ms ease-out;overflow:hidden}
-.session-heading{display:flex;justify-content:space-between;align-items:center;padding:15px 20px 0;flex-shrink:0}
-.session-heading .eyebrow{margin:0}
-.session-heading>div{display:flex}
-.session-tabs{display:flex;border-bottom:1px solid var(--border-subtle);padding:0 20px;gap:8px;flex-shrink:0}
-.session-tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:12px 6px;font-size:12px;color:var(--text-secondary)}
-.session-tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
-.session-content{min-height:0;overflow:auto;padding:12px 18px 20px;flex:1}
 .search-palette{width:min(620px,calc(100vw - 60px));max-height:80vh;margin:12vh auto auto;padding:0;border:1px solid var(--border-subtle);background:var(--bg-panel);color:var(--text-primary);border-radius:16px;box-shadow:0 24px 100px #0007;overflow:hidden}
 .search-palette::backdrop{background:#101318a6;backdrop-filter:blur(4px)}
 .search-palette form{display:flex;align-items:center;gap:13px;padding:20px;border-bottom:1px solid var(--border-subtle)}
@@ -57,8 +49,6 @@
 .palette-empty{text-align:center;padding:32px 20px;color:var(--text-secondary)}
 .palette-empty svg{color:var(--accent);margin-bottom:12px}
 .palette-empty h3{color:var(--text-primary)}
-@keyframes session-enter{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
-@media(min-width:1440px){.app.session-open.session-pinned{grid-template-columns:80px minmax(0,1fr) 360px}.session-pinned .command-bar{grid-column:2/4}.session-pinned .listening-context{position:relative;grid-column:3;grid-row:2;top:auto;bottom:auto;width:auto;box-shadow:none!important}}
-@media(max-width:1200px){.command-bar{gap:10px;padding:0 20px}.global-search{width:190px}.compact-transport{width:206px;padding-left:12px}.compact-track strong,.compact-track small{max-width:112px}.main{padding:28px 26px}.pin-session{display:none}}
-@media(max-width:1040px){.app{grid-template-columns:68px minmax(0,1fr);grid-template-rows:68px minmax(0,1fr)}.nav-rail{padding-left:5px;padding-right:5px}.rail-item{font-size:8px}.command-bar{padding:0 16px}.breadcrumbs{font-size:11px}.global-search{width:175px}.compact-transport{width:180px}.compact-track strong,.compact-track small{max-width:90px}.listening-context{top:68px;width:340px}.main{padding:25px 24px}}
-@media(max-width:780px){.breadcrumbs{display:none}.global-search{flex:1}.command-bar{gap:8px}.compact-transport{width:82px}.compact-track>span:last-child{display:none}.history-controls{display:none}.main{padding:22px 18px}.listening-context{left:68px;width:auto}.listening-context .pb-left{flex-direction:row;align-items:center;text-align:left}.listening-context .pb-cover{width:90px;height:90px;margin:0}.listening-context .pb-heart{position:static}.session-content{padding:16px 30px}}
+@media(max-width:1200px){.command-bar{gap:10px;padding:0 20px}.global-search{width:190px}.compact-transport{width:206px;padding-left:12px}.compact-track strong,.compact-track small{max-width:112px}.main{padding:28px 26px}}
+@media(max-width:1040px){.app{grid-template-columns:68px minmax(0,1fr);grid-template-rows:68px minmax(0,1fr)}.nav-rail{padding-left:5px;padding-right:5px}.rail-item{font-size:8px}.command-bar{padding:0 16px}.breadcrumbs{font-size:11px}.global-search{width:175px}.compact-transport{width:180px}.compact-track strong,.compact-track small{max-width:90px}.main{padding:25px 24px}}
+@media(max-width:780px){.breadcrumbs{display:none}.global-search{flex:1}.command-bar{gap:8px}.compact-transport{width:82px}.compact-track>span:last-child{display:none}.history-controls{display:none}.main{padding:22px 18px}}

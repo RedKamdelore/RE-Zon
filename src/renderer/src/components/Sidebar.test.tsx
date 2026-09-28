@@ -15,7 +15,7 @@ beforeEach(()=>{
  ;(globalThis as Record<string,unknown>).IS_REACT_ACT_ENVIRONMENT=true
  host=document.createElement('div');document.body.append(host);root=createRoot(host)
  useNavStore.setState({view:{name:'home'},past:[],future:[]})
- useWorkspaceStore.setState({sessionOpen:false,collections:{}})
+ useWorkspaceStore.setState({fullPlayerOpen:false,collections:{}})
  usePlaylistStore.setState({playlists:Array.from({length:12},(_,i)=>({id:'p'+i,name:'Подборка '+i,trackIds:[],createdAt:1}))})
  useLibraryStore.setState({tracks:[{id:'a',title:'Song',artist:'Artist',album:'Album',durationSec:5,sourceId:'local',filePath:'a.mp3'}],hiddenIds:[]})
  useAccountsStore.setState({accounts:[],libraries:{}})
@@ -37,9 +37,9 @@ it('marks sources active while viewing an account collection',()=>{
  act(()=>useNavStore.getState().setView({name:'service',accountId:'vk:1',section:'liked'}))
  expect(host.querySelector('[aria-label="Источники"]')?.getAttribute('aria-current')).toBe('page')
 })
-it('opens the listening context without replacing the current route',()=>{
- click('[aria-label="Сеанс"]')
- expect(useWorkspaceStore.getState().sessionOpen).toBe(true)
+it('opens the full player without replacing the current route',()=>{
+ click('[aria-label="Плеер"]')
+ expect(useWorkspaceStore.getState().fullPlayerOpen).toBe(true)
  expect(useNavStore.getState().view).toEqual({name:'home'})
 })
 it('keeps library filters when visiting an album and going back',()=>{

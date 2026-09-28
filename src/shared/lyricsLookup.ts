@@ -8,5 +8,5 @@ export interface LyricsLookupRequest {
 export interface LyricsLookupResult {
   text: string
   synced: boolean
-  source: 'lrclib'
+  source: 'lrclib' | 'lrcapi'
 }

@@ -58,13 +58,18 @@ export class AudioEngine {
     return node
   })
   private gain = this.ctx.createGain()
+  private analyser = this.ctx.createAnalyser()
+  private levelSamples = new Uint8Array(0)
 
   constructor() {
     // Обе деки → общая цепь: 10-полосный EQ → master gain → destination
     for (const deck of this.decks) deck.gain.connect(this.filters[0])
     const chain = [...this.filters, this.gain]
     for (let i = 0; i < chain.length - 1; i++) chain[i].connect(chain[i + 1])
-    this.gain.connect(this.ctx.destination)
+    this.analyser.fftSize = 256
+    this.levelSamples = new Uint8Array(this.analyser.frequencyBinCount)
+    this.gain.connect(this.analyser)
+    this.analyser.connect(this.ctx.destination)
     // Деки в DOM (скрыты): отладка/DevTools видят оба элемента, на звук не влияет
     for (const deck of this.decks) {
       deck.el.style.display = 'none'
@@ -122,6 +127,17 @@ export class AudioEngine {
   setEqGain(band: number, db: number): void {
     if (band < 0 || band >= this.filters.length) return
     this.filters[band].gain.value = db
+  }
+
+  /** Текущая громкость выходного сигнала для фоновой анимации, 0…1. */
+  getLevel(): number {
+    this.analyser.getByteTimeDomainData(this.levelSamples)
+    let sum = 0
+    for (const sample of this.levelSamples) {
+      const amplitude = (sample - 128) / 128
+      sum += amplitude * amplitude
+    }
+    return Math.min(1, Math.sqrt(sum / this.levelSamples.length) * 5)
   }
 
   /**

@@ -461,7 +461,7 @@ export default function SettingsView() {
       <section className="settings-section" hidden={page !== 'playback'}>
         <h2>Воспроизведение</h2>
         <div className="settings-label">
-          Кроссфейдер: {playback.crossfadeSec === 0 ? 'Выкл' : `${playback.crossfadeSec} сек`}
+          Кроссфейд: {playback.crossfadeSec === 0 ? 'Выкл' : `${playback.crossfadeSec} с`}
         </div>
         <input
           type="range"

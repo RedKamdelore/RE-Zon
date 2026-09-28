@@ -15,6 +15,7 @@ export interface PlayerEngine {
   seek: (sec: number) => void
   setVolume: (v: number) => void
   setEqGain: (band: number, db: number) => void
+  getLevel?: () => number
   load: (url: string) => void // src без воспроизведения ('' — очистить)
   crossfadeTo?: (url: string, durationSec: number) => void // двухдековый движок; вызовы защищены проверкой
   elements?: HTMLAudioElement[] // элементы всех дек (подписки); по умолчанию [element]
@@ -401,6 +402,7 @@ const lazyEngine: PlayerEngine = {
   seek: (sec) => getRealEngine().seek(sec),
   setVolume: (v) => getRealEngine().setVolume(v),
   setEqGain: (band, db) => getRealEngine().setEqGain(band, db),
+  getLevel: () => getRealEngine().getLevel(),
   load: (url) => getRealEngine().load(url),
   crossfadeTo: (url, sec) => getRealEngine().crossfadeTo(url, sec),
 }

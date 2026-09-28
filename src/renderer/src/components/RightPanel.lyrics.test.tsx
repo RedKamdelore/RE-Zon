@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import RightPanel from './RightPanel'
+import RightPanel, { LyricsPanel } from './RightPanel'
 import { usePlayerStore } from '../stores/playerStore'
 import { useLyricsStore } from '../stores/lyricsStore'
 import { useWorkspaceStore } from '../stores/workspaceStore'
@@ -17,7 +17,7 @@ beforeEach(() => {
   useLyricsStore.setState({overrides:{}})
   useWorkspaceStore.setState({lyricDrafts:{}})
 })
-afterEach(() => {act(() => root.unmount());host.remove()})
+afterEach(() => {act(() => root.unmount());host.remove();vi.unstubAllGlobals()})
 it('follows playback, seeks on a line click and lets the listener pause scrolling', () => {
   act(() => root.render(<RightPanel panel="lyrics" onClose={()=>{}}/>))
   expect(host.querySelector('.rp-lyrics-line.active')).toBeNull()
@@ -33,4 +33,26 @@ it('preserves display of plain lyrics without timing', () => {
   act(() => root.render(<RightPanel panel="lyrics" onClose={()=>{}}/>))
   expect(host.querySelector('.rp-lyrics-text')?.textContent).toContain('без времени')
   expect(host.querySelector('.rp-lyrics-timed')).toBeNull()
+})
+it('keeps the first and last timed lines centered when the full-player pane resizes', () => {
+  let resize: ResizeObserverCallback | undefined
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: ResizeObserverCallback) { resize = callback }
+    observe() {}
+    disconnect() {}
+  })
+  act(() => root.render(<div className="full-player-lyrics-body"><LyricsPanel /></div>))
+  const container = host.querySelector<HTMLDivElement>('.rp-lyrics-timed')!
+  const lines = host.querySelectorAll<HTMLButtonElement>('.rp-lyrics-line')
+  Object.defineProperty(container, 'clientHeight', { configurable: true, value: 300 })
+  Object.defineProperty(lines[0], 'clientHeight', { configurable: true, value: 40 })
+  Object.defineProperty(lines[1], 'clientHeight', { configurable: true, value: 80 })
+  act(() => resize?.([], {} as ResizeObserver))
+  expect(container.style.getPropertyValue('--lyrics-leading-space')).toBe('130px')
+  expect(container.style.getPropertyValue('--lyrics-trailing-space')).toBe('110px')
+
+  Object.defineProperty(container, 'clientHeight', { configurable: true, value: 420 })
+  act(() => resize?.([], {} as ResizeObserver))
+  expect(container.style.getPropertyValue('--lyrics-leading-space')).toBe('190px')
+  expect(container.style.getPropertyValue('--lyrics-trailing-space')).toBe('170px')
 })

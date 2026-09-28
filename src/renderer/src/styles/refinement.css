@@ -43,7 +43,6 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 .pl-header { gap: 24px; margin-bottom: 24px; }
 .playerbar { background-color: var(--bg-panel); border-radius: var(--radius-card); padding: 12px 18px; }
 .pb-cover { width: 48px; height: 48px; border-radius: 7px; }
-.right-panel { padding-top: 8px; }
 .main:has(> .settings-workspace) { padding: 24px; }
 .settings-heading { padding: 0 0 20px; }
 .settings-heading > .muted { display: none; }

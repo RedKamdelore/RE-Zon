@@ -91,4 +91,21 @@ describe('lyricsStore', () => {
       vi.advanceTimersByTime(1000)
     }).not.toThrow()
   })
+
+  it('retries previously cached plain lyrics while keeping synchronized results', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => JSON.stringify({
+        plain: { text: 'old plain result', synced: false, source: 'lrclib' },
+        invalid: { text: 'untimed result mislabeled by old lookup', synced: true, source: 'lrclib' },
+        timed: { text: '[00:01.00]line', synced: true, source: 'lrcapi' },
+      }),
+    })
+    vi.resetModules()
+    try {
+      const { useLyricsStore: freshStore } = await import('./lyricsStore')
+      expect(freshStore.getState().automatic).toEqual({ timed: { text: '[00:01.00]line', synced: true, source: 'lrcapi' } })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

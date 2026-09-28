@@ -1,12 +1,13 @@
 {
   "name": "rezon",
   "productName": "ReZon",
-  "version": "0.4.0-beta.6",
+  "version": "0.4.0-beta.7",
   "private": true,
   "description": "Личная музыкальная коллекция и плеер Re:Zon",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "preview:player": "vite --config vite.preview.config.mjs --host 127.0.0.1 --port 5178",
     "build": "electron-vite build",
     "test": "vitest run --passWithNoTests",
     "dist": "node scripts/build-release.cjs",
