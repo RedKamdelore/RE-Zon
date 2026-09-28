@@ -42,7 +42,10 @@ jobs:
         run: |
           $version = node -p "require('./package.json').version"
           $tag = "v$version"
-          $releaseArgs = @('release', 'create', $tag, '--draft', '--verify-tag', '--title', "Re:Zon $version", '--generate-notes')
+          $releaseArgs = @('release', 'create', $tag, '--draft', '--verify-tag', '--title', "Re:Zon $version")
+          $notes = "docs/releases/$version.md"
+          if (Test-Path -LiteralPath $notes) { $releaseArgs += @('--notes-file', $notes) }
+          else { $releaseArgs += '--generate-notes' }
           if ($version -match '-beta\.') { $releaseArgs += '--prerelease' }
           gh @releaseArgs
           if ($LASTEXITCODE -ne 0) { throw 'Could not create release draft' }
