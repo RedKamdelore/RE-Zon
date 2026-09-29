@@ -10,6 +10,7 @@ export const DEFAULT_DATA: PersistedData = {
   musicFolders: [],
   playlists: [],
   lyricsOverrides: {},
+  lyricOffsets: {},
   volume: 0.8,
   eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   appearance: { skin: 'atlas', theme: defaultTheme(), customThemes: {}, scale: 1 },

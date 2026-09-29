@@ -8,7 +8,7 @@ import { session as electronSession } from 'electron'
 import { importVkBrowser, prepareVkSession } from './vkBrowser'
 import { registerAccountIpc } from './accounts'
 import { findAlbumCover } from './artwork'
-import { lookupLyrics } from './lyricsLookup'
+import { lookupLyrics, lookupLyricsReport } from './lyricsLookup'
 import { scSearchPage, scResolveStream } from './soundcloud'
 import { lastfmApi, lfmAuthUrl, matchLfmAuthUrl, lfmGetSession, lfmScrobble, type ScrobblePayload } from './lastfm'
 import { openAuthWindow } from './authWindow'
@@ -42,6 +42,7 @@ const DEMO_DIR = app.isPackaged
 export function registerIpc(getWindow: () => BrowserWindow): void {
   registerAccountIpc(getWindow)
   ipcMain.handle('lyrics:lookup', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyrics(request))
+  ipcMain.handle('lyrics:lookupReport', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyricsReport(request))
   ipcMain.handle('artwork:album',(_e,artist:string,album:string)=>findAlbumCover(artist,album))
   ipcMain.handle('data:load', () => loadData())
   ipcMain.handle('data:save', (_e, data: PersistedData) => {

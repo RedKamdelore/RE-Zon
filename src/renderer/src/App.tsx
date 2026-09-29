@@ -68,7 +68,7 @@ export default function App() {
         .then(async (data) => {
           setPersistedBase(data)
           usePlaylistStore.getState().init(data.playlists)
-          useLyricsStore.getState().init(data.lyricsOverrides)
+          useLyricsStore.getState().init(data.lyricsOverrides, data.lyricOffsets)
           useStatsStore.getState().init(data.playStats)
           useSettingsStore.getState().init(data) // применяет appearance к DOM
           usePlayerStore.getState().setVolume(data.volume)

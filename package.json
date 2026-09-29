@@ -1,7 +1,7 @@
 {
   "name": "rezon",
   "productName": "ReZon",
-  "version": "0.4.0-beta.7",
+  "version": "0.4.0-beta.8",
   "private": true,
   "description": "Личная музыкальная коллекция и плеер Re:Zon",
   "main": "out/main/index.js",

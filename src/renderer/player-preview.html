@@ -1,6 +1,7 @@
 <!doctype html><html lang="ru"><head><meta charset="UTF-8"><title>Re:Zon — Player QA</title></head><body><div id="root"></div><script type="module">
 import { getPlayerEngine, usePlayerStore } from './src/stores/playerStore'
 import { useWorkspaceStore } from './src/stores/workspaceStore'
+import { useLyricsStore } from './src/stores/lyricsStore'
 import demoUrl from '../../resources/demo/rainy-loops.wav?url'
 const coverDataUrl='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600"><defs><radialGradient id="a"><stop stop-color="#f8b66c"/><stop offset="1" stop-color="#6d2d71"/></radialGradient><radialGradient id="b"><stop stop-color="#86dbd2"/><stop offset="1" stop-color="#284c7e"/></radialGradient></defs><rect width="600" height="600" fill="#161c35"/><circle cx="170" cy="190" r="260" fill="url(#a)"/><circle cx="500" cy="480" r="300" fill="url(#b)"/><path d="M0 440 Q250 280 600 360 L600 600 L0 600Z" fill="#292241" opacity=".6"/></svg>')
 const track={id:'qa:karaoke',sourceId:'demo',title:'Тёплый вечер',artist:'Маяк',album:'Линии света',durationSec:20,filePath:new URL(demoUrl,location.href).href,coverDataUrl,lyrics:'[00:00.00]Тёплый вечер начинается здесь\n[00:03.00]Город загорается снова\n[00:06.00]Мы находим свет в тишине\n[00:09.00]И музыка ведёт нас дальше\n[00:12.00]К новому дню'}
@@ -10,6 +11,13 @@ const upcoming=[
   {...track,id:'qa:dawn',title:'Первые лучи',artist:'Эхо',album:'После полуночи',lyrics:undefined},
 ]
 usePlayerStore.setState({queue:[track,...upcoming],order:[0,1,2,3],pos:0,currentSec:6,playing:false})
+const plain='Тёплый вечер начинается здесь\nГород загорается снова\nМы находим свет в тишине\nИ музыка ведёт нас дальше\nК новому дню'
+useLyricsStore.setState({reports:{[track.id]:{best:null,checkedAll:true,demo:true,sources:[
+  {source:'lrclib',status:'both',result:{source:'lrclib',synced:true,text:track.lyrics,plainText:plain}},
+  {source:'lrcapi',status:'synced',result:{source:'lrcapi',synced:true,text:track.lyrics}},
+  {source:'lrcmux',status:'plain',result:{source:'lrcmux',synced:false,text:plain}},
+  {source:'synclrc',status:'missing'},
+]}}})
 getPlayerEngine().load(track.filePath)
 useWorkspaceStore.setState({fullPlayerOpen:true,fullPlayerMode:'lyrics'})
 await import('./src/main')
