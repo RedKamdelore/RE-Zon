@@ -51,11 +51,12 @@ async function spotifyPages(account: ServiceAccount, path: string): Promise<any[
   return result
 }
 async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
-  const result: AccountLibrary = {all:[],liked:[],albums:[],unavailable:{},updatedAt:Date.now()}
+  const result: AccountLibrary = {all:[],liked:[],albums:[],playlists:[],unavailable:{},updatedAt:Date.now()}
   if (account.service === 'vk') {
     result.all = await importVkBrowser(account.partition)
     result.unavailable.liked = 'Отдельные лайки VK пока не загружаются. «Все песни» содержит добавленную музыку аккаунта.'
     result.unavailable.albums = 'Загрузка сохранённых альбомов VK пока не подключена.'
+    result.unavailable.playlists = 'Загрузка плейлистов VK пока не подключена.'
   } else if (account.service === 'spotify') {
     const data = loadData()
     const clientId = account.clientId || String(data.importSources.spotifyClientId ?? '')
@@ -76,14 +77,17 @@ async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
         result.albums.push({id:album.id,title:album.name,artist:album.artists?.map((a:any)=>a.name).join(', ') ?? '',tracks})
       }
     } catch(e) { result.albums=[]; result.unavailable.albums = errorMessage(e) }
+    const tracks = [...result.liked, ...result.albums.flatMap(a=>a.tracks ?? [])]
     try {
-      const tracks = [...result.liked, ...result.albums.flatMap(a=>a.tracks ?? [])]
       for (const playlist of await spotifyPages(account,'/v1/me/playlists?limit=50')) {
+        if (!playlist?.id) continue
         const items = await spotifyPages(account,`/v1/playlists/${encodeURIComponent(playlist.id)}/items?limit=50`)
-        tracks.push(...items.map(i=>spotifyTrack(i.item ?? i.track ?? {})).filter(t=>t.title))
+        const playlistTracks = items.map(i=>spotifyTrack(i.item ?? i.track ?? {})).filter(t=>t.title)
+        result.playlists!.push({id:playlist.id,title:playlist.name ?? 'Без названия',owner:playlist.owner?.display_name,tracks:playlistTracks})
+        tracks.push(...playlistTracks)
       }
-      result.all = [...new Map(tracks.map(t=>[t.extId ?? `${t.artist}\0${t.title}`,t])).values()]
-    } catch(e) {result.unavailable.all=errorMessage(e)}
+    } catch(e) {result.unavailable.playlists=errorMessage(e);result.playlists=[]}
+    result.all = [...new Map(tracks.map(t=>[t.extId ?? `${t.artist}\0${t.title}`,t])).values()]
   } else if (account.service === 'yandex') {
     let likes
     try { likes = await yaLikes(account.token) }
@@ -98,6 +102,7 @@ async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
     result.liked=likes
     result.unavailable.all='Пока загружается только раздел «Понравилось», а не вся коллекция Яндекс Музыки.'
     result.unavailable.albums='Загрузка сохранённых альбомов Яндекс Музыки пока не подключена.'
+    result.unavailable.playlists='Загрузка плейлистов Яндекс Музыки пока не подключена.'
   } else {
     const data = loadData()
     if (!account.userId) throw new Error('Last.fm: неизвестно имя аккаунта — переподключите его')
@@ -116,16 +121,23 @@ async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
       } catch(e) { result[section]=[]; result.unavailable[section]=errorMessage(e) }
     }
     result.unavailable.albums='Last.fm не предоставляет раздел сохранённых альбомов. «Все песни» — история прослушанных треков.'
+    result.unavailable.playlists='Last.fm не предоставляет раздел плейлистов.'
   }
   return result
 }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 
 export function registerAccountIpc(getWindow: () => BrowserWindow): void {
-  const initial=loadData()
-  const migrated=migrateAccounts(initial.connections,initial.serviceAccounts)
-  if(Object.keys(migrated).length!==Object.keys(initial.serviceAccounts ?? {}).length) {
-    saveData({...initial,serviceAccounts:migrated})
+  // A damaged profile must not prevent registration of the data recovery IPC.
+  // loadData will report the problem to the renderer, which shows recovery UI.
+  try {
+    const initial=loadData()
+    const migrated=migrateAccounts(initial.connections,initial.serviceAccounts)
+    if(Object.keys(migrated).length!==Object.keys(initial.serviceAccounts ?? {}).length) {
+      saveData({...initial,serviceAccounts:migrated})
+    }
+  } catch (error) {
+    console.error('Account migration skipped because profile could not be opened:', error)
   }
   ipcMain.handle('accounts:list', () => Object.values(accounts()).map(accountView))
   ipcMain.handle('accounts:connect', async (_event, service: ServiceId, label: string, reconnectId?: string) => {
@@ -204,6 +216,8 @@ export function registerAccountIpc(getWindow: () => BrowserWindow): void {
         if(library.unavailable.all) library.all=previous.all
         if(library.unavailable.liked) library.liked=previous.liked
         if(library.unavailable.albums) library.albums=previous.albums
+        if(library.unavailable.playlists) library.playlists=previous.playlists ?? []
+        if(library.unavailable.all && library.unavailable.liked && library.unavailable.albums && library.unavailable.playlists) library.updatedAt=previous.updatedAt
       }
       saveData({...data,accountLibraries:{...data.accountLibraries,[id]:library}})
       return {ok:true,library}

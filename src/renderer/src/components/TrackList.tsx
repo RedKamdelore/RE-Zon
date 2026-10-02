@@ -32,12 +32,16 @@ export function ContextMenu({
   onPlayTrack,
   onRemove,
   onClose,
+  onSaveToLibrary,
+  temporary = false,
 }: {
   menu: MenuState
   hasRemove: boolean
   onPlayTrack: (index: number) => void
   onRemove: (trackId: string) => void
   onClose: () => void
+  onSaveToLibrary?: () => void
+  temporary?: boolean
 }) {
   const playlists = usePlaylistStore((s) => s.playlists)
   const favoriteIds = useFavoritesStore((s) => s.ids)
@@ -82,6 +86,7 @@ export function ContextMenu({
     <>
       <div className="ctx-overlay" onClick={onClose} onContextMenu={onClose} />
       <div ref={menuRef} className="ctx-menu" style={{ left: pos.left, top: pos.top }}>
+        {temporary && onSaveToLibrary && <button className="ctx-item" onClick={() => { onSaveToLibrary(); onClose() }}>+ В коллекцию</button>}
         <button
           className="ctx-item"
           onClick={() => {
@@ -112,6 +117,7 @@ export function ContextMenu({
         <button
           className="ctx-item"
           onClick={() => {
+            if (!favoriteIds.includes(t.id)) onSaveToLibrary?.()
             toggleFavorite(t.id)
             onClose()
           }}
@@ -120,6 +126,7 @@ export function ContextMenu({
         </button>
         {t.sourceId === 'direct' && <button className="ctx-item" onClick={() => {
           setOfflineError('')
+          onSaveToLibrary?.()
           void window.api.offlineQueue(t).then(() => { useNavStore.getState().setView({name:'settings',page:'downloads'}); onClose() }).catch(error => setOfflineError(error instanceof Error ? error.message : 'Не удалось начать загрузку.'))
         }}>Сохранить офлайн</button>}
         {offlineError && <p role="alert" className="import-error">{offlineError}</p>}
@@ -139,10 +146,10 @@ export function ContextMenu({
             Удалить из плейлиста
           </button>
         )}
-        {(t.album !== 'Неизвестный альбом' || t.artist !== 'Неизвестный исполнитель') && (
+        {!temporary && (t.album !== 'Неизвестный альбом' || t.artist !== 'Неизвестный исполнитель') && (
           <div className="ctx-sep" />
         )}
-        {t.album !== 'Неизвестный альбом' && (
+        {!temporary && t.album !== 'Неизвестный альбом' && (
           <button
             className="ctx-item"
             onClick={() => {
@@ -153,7 +160,7 @@ export function ContextMenu({
             Перейти к альбому
           </button>
         )}
-        {t.artist !== 'Неизвестный исполнитель' && (
+        {!temporary && t.artist !== 'Неизвестный исполнитель' && (
           <button
             className="ctx-item"
             onClick={() => {
@@ -164,8 +171,8 @@ export function ContextMenu({
             Перейти к исполнителю
           </button>
         )}
-        <div className="ctx-sep" />
-        <button
+        {!temporary && <div className="ctx-sep" />}
+        {!temporary && <button
           className="ctx-item"
           onClick={() => {
             useNavStore.getState().setView({ name: 'radio', trackId: t.id })
@@ -173,7 +180,7 @@ export function ContextMenu({
           }}
         >
           Рекомендации по треку
-        </button>
+        </button>}
         <button
           className="ctx-item"
           onClick={() => {
@@ -202,7 +209,7 @@ export function ContextMenu({
             onClose()
           }}
         >
-          Скрыть из библиотеки
+          {temporary ? 'Скрыть результат' : 'Скрыть из библиотеки'}
         </button>
       </div>
       {pickerOpen && (
@@ -212,6 +219,7 @@ export function ContextMenu({
               key={pl.id}
               className="ctx-item"
               onClick={() => {
+                onSaveToLibrary?.()
                 usePlaylistStore.getState().addTrack(pl.id, menu.track.id)
                 onClose()
               }}
@@ -343,14 +351,15 @@ export default function TrackList({ tracks, onPlay, onRemoveTrack, onRemoveTrack
       </div>
       {sorted.map((t, i) => (
         <div
-          key={t.id}
+          key={`${t.id}:${i}`}
           className={`tl-row${selected.has(t.id) ? ' tl-selected' : ''}`}
           tabIndex={0}
           aria-label={`${t.artist} — ${t.title}`}
-          onDoubleClick={()=>play(sorted,i)}
-          onKeyDown={e=>{if(e.target===e.currentTarget&&e.key==='Enter'){e.preventDefault();play(sorted,i)}if(e.target===e.currentTarget&&e.code==='Space'){e.preventDefault();e.stopPropagation();selectRow(t.id,e.shiftKey)}}}
+          onKeyDown={e=>{if(e.target===e.currentTarget&&e.key==='Enter'){e.preventDefault();if(selecting)selectRow(t.id,e.shiftKey);else play(sorted,i)}if(e.target===e.currentTarget&&e.code==='Space'){e.preventDefault();e.stopPropagation();selectRow(t.id,e.shiftKey)}}}
           onClick={(e) => {
-            selectRow(t.id, e.shiftKey)
+            if (e.detail > 1) return
+            if (selecting || e.shiftKey || e.ctrlKey || e.metaKey) selectRow(t.id, e.shiftKey)
+            else play(sorted,i)
           }}
           onContextMenu={(e) => {
             e.preventDefault()

@@ -33,6 +33,8 @@ import { useNavStore, type View } from './stores/navStore'
 export type { View }
 
 export default function App() {
+  const [profileError,setProfileError]=useState(false)
+  const [profileRecovered,setProfileRecovered]=useState(false)
   const view = useNavStore((s) => s.view)
   const mainRef=useRef<HTMLElement>(null)
   const savedScroll=useRef(0)
@@ -63,12 +65,15 @@ export default function App() {
     if (window.api) {
       // Единственный loadData на старте: результат раздаётся всем сторам,
       // полный снимок сохраняется как база для дебаунсированных saveData
-      window.api
-        .loadData()
-        .then(async (data) => {
+      void (async () => {
+        let data
+        try { data = await window.api.loadData() }
+        catch (e) { console.error('loadData failed:', e); setProfileError(true); return }
+        try {
+          if(typeof window.api.profileStatus==='function') void window.api.profileStatus().then(status=>setProfileRecovered(status.recovered)).catch(error=>console.warn('profile status unavailable:',error))
           setPersistedBase(data)
           usePlaylistStore.getState().init(data.playlists)
-          useLyricsStore.getState().init(data.lyricsOverrides, data.lyricOffsets)
+          useLyricsStore.getState().init(data.lyricsOverrides, data.lyricOffsets, data.lyricSelections)
           useStatsStore.getState().init(data.playStats)
           useSettingsStore.getState().init(data) // применяет appearance к DOM
           usePlayerStore.getState().setVolume(data.volume)
@@ -78,8 +83,8 @@ export default function App() {
           await useConnectionsStore.getState().init()
           await useAccountsStore.getState().init(data.accountLibraries)
           void useAccountsStore.getState().refreshAll()
-        })
-        .catch((e) => console.error('loadData failed:', e))
+        } catch (e) { console.error('profile initialization failed:', e) }
+      })()
     } else {
       void useLibraryStore.getState().init()
     }
@@ -89,14 +94,16 @@ export default function App() {
   useEffect(() => {
     let lastAttempt=Date.now()
     const refresh=()=>{
-      if(document.visibilityState==='hidden'||Date.now()-lastAttempt<60_000) return
+      if(document.visibilityState==='hidden'||navigator.onLine===false||Date.now()-lastAttempt<60_000) return
       lastAttempt=Date.now()
       void useAccountsStore.getState().refreshAll()
     }
+    const reconnect=()=>{lastAttempt=0;refresh()}
     const timer=window.setInterval(refresh,120_000)
     window.addEventListener('focus',refresh)
+    window.addEventListener('online',reconnect)
     document.addEventListener('visibilitychange',refresh)
-    return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh)}
+    return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);window.removeEventListener('online',reconnect);document.removeEventListener('visibilitychange',refresh)}
   }, [])
 
   const fullPlayerOpen = useWorkspaceStore(s => s.fullPlayerOpen)
@@ -117,12 +124,13 @@ export default function App() {
   }
 
 
-  // Команды из трея (player:cmd): toggle / next / prev
+  // Команды из трея (player:cmd): toggle / stop / next / prev
   useEffect(() => {
     if (!window.api) return
     return window.api.onPlayerCommand((cmd) => {
       const p = usePlayerStore.getState()
       if (cmd === 'toggle') p.togglePlay()
+      if (cmd === 'stop') p.stop()
       if (cmd === 'next') p.next({ manual: true })
       if (cmd === 'prev') p.prev()
       if (cmd === 'expand') useWorkspaceStore.getState().openFullPlayer()
@@ -148,6 +156,12 @@ export default function App() {
 
   const playlist = view.name === 'playlist' ? playlists.find((p) => p.id === view.id) : undefined
 
+  if (profileError) return <div className="profile-error-screen" role="alert">
+    <h1>Не удалось открыть профиль Re:Zon</h1>
+    <p>Файл данных и его резервная копия не читаются. Приложение остановило загрузку, чтобы не заменить ваши данные пустым профилем.</p>
+    <div className="heading-actions"><button className="btn-primary" onClick={()=>void window.api.openProfileFolder()}>Открыть папку профиля</button><button className="btn-outline" onClick={()=>window.location.reload()}>Проверить снова</button></div>
+  </div>
+
   if (mini) {
     return (
       <div className="app mini">
@@ -161,6 +175,7 @@ export default function App() {
       <Sidebar view={view} onNavigate={setView} />
       <CommandBar />
       <UpdateNotice />
+      {profileRecovered&&<div className="profile-recovery-banner" role="status">Профиль восстановлен из резервной копии. Повреждённый файл сохранён в папке профиля.<button className="btn-outline" onClick={()=>void window.api.openProfileFolder()}>Открыть папку</button><button className="icon-btn" aria-label="Закрыть уведомление" onClick={()=>setProfileRecovered(false)}>×</button></div>}
       <main className={'main' + (fullPlayerOpen ? ' main-full-player' : '')} ref={mainRef}>
         {fullPlayerOpen ? <FullPlayer onMini={() => void setMiniMode(true)} /> : <>
         {lastHiddenIds.length > 0 && <div className="tl-bulk-notice" role="status">

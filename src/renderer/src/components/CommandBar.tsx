@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../stores/workspaceStore'
 import { usePlaylistStore } from '../stores/playlistStore'
 import { useLibraryStore } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
-import { PlayIcon, PauseIcon } from './icons'
+import { PlayIcon, PauseIcon, StopIcon } from './icons'
 import { AtlasIcon } from './AtlasIcon'
 import Artwork from './Artwork'
 export default function CommandBar() {
@@ -34,6 +34,7 @@ export default function CommandBar() {
     {!fullPlayerOpen && <div className="compact-transport">
       <button className="compact-track" aria-label="Открыть большой плеер" onClick={() => useWorkspaceStore.getState().openFullPlayer()}><Artwork src={track?.coverDataUrl} artist={track?.artist ?? 'ReZon'} album={track?.album ?? 'Сеанс'}/><span><strong>{track?.title ?? 'Ваш музыкальный атлас'}</strong><small>{track?.artist ?? 'Выберите, что послушать'}</small></span></button>
       <button className="transport-toggle icon-btn" disabled={!track} aria-label={playing ? 'Пауза' : 'Слушать'} onClick={() => usePlayerStore.getState().togglePlay()}>{playing ? <PauseIcon size={19}/> : <PlayIcon size={19}/>}</button>
+      <button className="transport-stop icon-btn" disabled={!track} aria-label="Стоп" title="Стоп" onClick={() => usePlayerStore.getState().stop()}><StopIcon size={15}/></button>
     </div>}
   </header>
 }

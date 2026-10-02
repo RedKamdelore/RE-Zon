@@ -1,7 +1,7 @@
 import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
 import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
-import { loadData, saveData } from './persistence'
+import { loadData, saveData, profileRecoveryStatus } from './persistence'
 import { scanFolders, demoTracks } from './library'
 import { hasVkSessionCookie, matchVkWebAuthUrl, VK_PARTITION } from './vkWeb'
 import { session as electronSession } from 'electron'
@@ -45,6 +45,8 @@ export function registerIpc(getWindow: () => BrowserWindow): void {
   ipcMain.handle('lyrics:lookupReport', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyricsReport(request))
   ipcMain.handle('artwork:album',(_e,artist:string,album:string)=>findAlbumCover(artist,album))
   ipcMain.handle('data:load', () => loadData())
+  ipcMain.handle('data:profileStatus', () => profileRecoveryStatus())
+  ipcMain.handle('data:openFolder', () => shell.openPath(app.getPath('userData')))
   ipcMain.handle('data:save', (_e, data: PersistedData) => {
     const current = loadData()
     saveData({...data,connections:current.connections,serviceAccounts:current.serviceAccounts,accountLibraries:current.accountLibraries})

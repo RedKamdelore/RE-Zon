@@ -1,7 +1,7 @@
 import { usePlayerStore } from '../stores/playerStore'
 import Artwork from './Artwork'
 import { fmt } from '../utils/format'
-import { PlayIcon, PauseIcon, PrevIcon, NextIcon, ExpandIcon, MusicNoteIcon } from './icons'
+import { PlayIcon, PauseIcon, StopIcon, PrevIcon, NextIcon, ExpandIcon, MusicNoteIcon } from './icons'
 
 interface MiniPlayerProps {
   onExpand: () => void
@@ -12,7 +12,9 @@ export default function MiniPlayer({ onExpand }: MiniPlayerProps) {
   const order = usePlayerStore((s) => s.order)
   const pos = usePlayerStore((s) => s.pos)
   const playing = usePlayerStore((s) => s.playing)
+  const playbackError = usePlayerStore((s) => s.playbackError)
   const togglePlay = usePlayerStore((s) => s.togglePlay)
+  const stop = usePlayerStore((s) => s.stop)
   const next = usePlayerStore((s) => s.next)
   const prev = usePlayerStore((s) => s.prev)
   const currentSec = usePlayerStore((s) => s.currentSec)
@@ -47,6 +49,9 @@ export default function MiniPlayer({ onExpand }: MiniPlayerProps) {
         >
           {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
         </button>
+        <button className="icon-btn" disabled={disabled} aria-label="Стоп" title="Остановить и вернуться к началу" onClick={stop}>
+          <StopIcon size={18} />
+        </button>
         <button className="icon-btn" disabled={disabled} aria-label="Следующая запись" title="Вперёд" onClick={() => next({ manual: true })}>
           <NextIcon size={18} />
         </button>
@@ -55,6 +60,7 @@ export default function MiniPlayer({ onExpand }: MiniPlayerProps) {
         <ExpandIcon size={18} />
       </button>
       <div className="mp-progress"><span>{fmt(currentSec)}</span><input type="range" aria-label="Позиция воспроизведения" min={0} max={track?.durationSec || 1} step={0.1} value={Math.min(currentSec,track?.durationSec || 1)} disabled={!track?.durationSec} onChange={e=>seek(Number(e.target.value))}/><span>{fmt(track?.durationSec || 0)}</span></div>
+      {playbackError && <p className="mp-error" role="alert">{playbackError}</p>}
     </div>
   )
 }

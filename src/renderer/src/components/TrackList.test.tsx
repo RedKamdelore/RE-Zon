@@ -32,6 +32,13 @@ it('Ctrl-click selects without playback and Shift uses the displayed sorted orde
   click(button('Убрать из библиотеки'))
   expect(useLibraryStore.getState().hiddenIds).toEqual(['A','B'])
 })
+it('plays a track with one click outside selection mode', () => {
+  const play=vi.fn()
+  act(() => root.render(<TrackList tracks={tracks} onPlay={play} />))
+  click(host.querySelector('.tl-row')!)
+  expect(play).toHaveBeenCalledOnce()
+  expect(host.querySelector('input:checked')).toBeNull()
+})
 it('Ctrl+A selects only the visible list and bulk removal passes IDs together', () => {
   const remove=vi.fn()
   act(() => root.render(<TrackList tracks={tracks.slice(1)} onRemoveTracks={remove} />))

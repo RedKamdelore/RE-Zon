@@ -13,6 +13,13 @@ const entry = metadata.files.find(f => f.url === exeName)
 if (!entry || entry.sha512 !== crypto.createHash('sha512').update(exe).digest('base64') || entry.size !== exe.length) throw new Error('Update metadata checksum mismatch')
 const archive = path.join(folder, 'win-unpacked', 'resources', 'app.asar')
 const files = new Set(asar.listPackage(archive).map(f => f.replaceAll('\\', '/')))
+const privateName = /(?:^|\/)(?:player-data\.json|updates-settings\.json|\.env(?:\.[^/]*)?|[^/]+\.(?:pem|pfx|p12|key))$/i
+const privateEntries = [...files].filter(file => privateName.test(file))
+if (privateEntries.length) throw new Error(`Private or credential-like files found in app.asar: ${privateEntries.join(', ')}`)
+const resourceNames = fs.readdirSync(path.join(folder, 'win-unpacked', 'resources'))
+const allowedResources = new Set(['app.asar', 'app-update.yml', 'default_app.asar', 'demo', 'elevate.exe', 'icon.png', 'updates.json'])
+const unexpectedResources = resourceNames.filter(name => !allowedResources.has(name))
+if (unexpectedResources.length) throw new Error(`Unexpected packaged resources: ${unexpectedResources.join(', ')}`)
 const readJson = file => JSON.parse(asar.extractFile(archive, file.split('/').join(path.sep)).toString())
 const seen = new Set()
 function verifyPackage(folder) {
@@ -38,4 +45,4 @@ if (feed.feedUrl !== 'https://github.com/RedKamdelore/RE-Zon/') throw new Error(
 if (!fs.existsSync(path.join(folder, 'win-unpacked/resources/app-update.yml'))) throw new Error('Missing updater configuration')
 const sums = [...new Set([exeName,exeName+'.blockmap',channel+'.yml','latest.yml'])].map(name => crypto.createHash('sha256').update(fs.readFileSync(path.join(folder,name))).digest('hex')+'  '+name).join('\n')+'\n'
 fs.writeFileSync(path.join(folder, 'SHA256SUMS.txt'), sums)
-console.log(`Verified installer ${(exe.length/1024/1024).toFixed(1)} MiB, ${channel} metadata, SHA-512 and ${seen.size-1} runtime packages`)
+console.log(`Verified installer ${(exe.length/1024/1024).toFixed(1)} MiB, ${channel} metadata, SHA-512, ${seen.size-1} runtime packages and packaged file names`)

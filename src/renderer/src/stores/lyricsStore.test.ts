@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { useLyricsStore, getLyricsOverride, setLyricsOverride, setLyricOffset, searchLyrics } from './lyricsStore'
+import { useLyricsStore, getLyricsOverride, setLyricsOverride, setLyricsSelection, setLyricOffset, searchLyrics } from './lyricsStore'
 import { setPersistedBase } from './playlistStore'
 import { defaultTheme } from '@shared/themeModel'
 import type { PersistedData } from '@shared/types'
@@ -29,7 +29,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
 
 describe('lyricsStore', () => {
   beforeEach(() => {
-    useLyricsStore.setState({ overrides: {}, offsets: {}, automatic: {}, reports: {}, searching: {}, errors: {} })
+    useLyricsStore.setState({ overrides: {}, selections: {}, offsets: {}, automatic: {}, reports: {}, searching: {}, errors: {} })
     setPersistedBase(null)
   })
 
@@ -90,6 +90,22 @@ describe('lyricsStore', () => {
       vi.useFakeTimers()
       vi.advanceTimersByTime(1000)
     }).not.toThrow()
+  })
+
+  it('persists a chosen source and clears it when the listener edits or resets the text', () => {
+    vi.useFakeTimers()
+    const saveData = vi.fn().mockResolvedValue(undefined)
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData } }
+    setPersistedBase(makeBase())
+    const selected = { text: '[00:01]Line', synced: true, source: 'lrclib' as const }
+    setLyricsSelection('local:t1', selected)
+    vi.advanceTimersByTime(500)
+    expect(useLyricsStore.getState().selections['local:t1']).toEqual(selected)
+    expect((saveData.mock.calls[0][0] as PersistedData).lyricSelections).toEqual({ 'local:t1': selected })
+    setLyricsOverride('local:t1', 'Edited')
+    expect(useLyricsStore.getState().selections['local:t1']).toBeUndefined()
+    setLyricsSelection('local:t1', null)
+    expect(getLyricsOverride('local:t1')).toBeUndefined()
   })
 
   it('saves a bounded per-track timing correction and removes it on reset', () => {

@@ -45,6 +45,7 @@ export interface PersistedData {
   musicFolders: string[];
   playlists: Playlist[];
   lyricsOverrides: Record<string, string>;
+  lyricSelections?: Record<string, import('./lyricsLookup').LyricsLookupResult>; // явно выбранный результат источника
   lyricOffsets?: Record<string, number>; // сдвиг строк LRC в секундах для каждого трека
   volume: number;
   eqGains: number[]; // 10 значений dB

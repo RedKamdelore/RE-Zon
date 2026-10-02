@@ -7,6 +7,7 @@ import { fmt } from '../utils/format'
 import {
   PlayIcon,
   PauseIcon,
+  StopIcon,
   PrevIcon,
   NextIcon,
   ShuffleIcon,
@@ -37,11 +38,13 @@ export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
   const order = usePlayerStore((s) => s.order)
   const pos = usePlayerStore((s) => s.pos)
   const playing = usePlayerStore((s) => s.playing)
+  const playbackError = usePlayerStore((s) => s.playbackError)
   const shuffle = usePlayerStore((s) => s.shuffle)
   const repeat = usePlayerStore((s) => s.repeat)
   const currentSec = usePlayerStore((s) => s.currentSec)
   const volume = usePlayerStore((s) => s.volume)
   const togglePlay = usePlayerStore((s) => s.togglePlay)
+  const stop = usePlayerStore((s) => s.stop)
   const next = usePlayerStore((s) => s.next)
   const prev = usePlayerStore((s) => s.prev)
   const seek = usePlayerStore((s) => s.seek)
@@ -119,6 +122,9 @@ export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
           >
             {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
           </button>
+          <button className="icon-btn pb-stop-control" title="Стоп — остановить и вернуться к началу" aria-label="Стоп" disabled={disabled} onClick={stop}>
+            <StopIcon size={18} />
+          </button>
           <button className="icon-btn" title="Следующий трек" aria-label="Следующий трек" disabled={disabled} onClick={() => next({ manual: true })}>
             <NextIcon size={20} />
           </button>
@@ -151,7 +157,11 @@ export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
             onChange={(e) => seek(Number(e.target.value))}
           />
           <span>{fmt(track?.durationSec ?? 0)}</span>
+          <button className="icon-btn pb-stop-inline" title="Стоп — остановить и вернуться к началу" aria-label="Стоп" disabled={disabled} onClick={stop}>
+            <StopIcon size={17} />
+          </button>
         </div>
+        {playbackError && <p className="pb-error" role="alert">{playbackError}</p>}
       </div>
 
       <div className="pb-right">

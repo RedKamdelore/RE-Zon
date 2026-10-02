@@ -19,13 +19,15 @@ export interface AccountView {
   connectedAt: number
   autoRefresh: boolean
 }
-export type AccountSection = 'all' | 'liked' | 'albums'
-export const SECTION_NAMES: Record<AccountSection, string> = {all:'Все песни',liked:'Понравилось',albums:'Сохранённые альбомы'}
+export type AccountSection = 'all' | 'liked' | 'albums' | 'playlists'
+export const SECTION_NAMES: Record<AccountSection, string> = {all:'Все песни',liked:'Понравилось',albums:'Сохранённые альбомы',playlists:'Плейлисты'}
 export interface AccountAlbum { id: string; title: string; artist: string; tracks?: ImportedTrack[] }
+export interface AccountPlaylist { id: string; title: string; owner?: string; tracks: ImportedTrack[] }
 export interface AccountLibrary {
   all: ImportedTrack[]
   liked: ImportedTrack[]
   albums: AccountAlbum[]
+  playlists?: AccountPlaylist[] // absent in snapshots written before playlist support
   unavailable: Partial<Record<AccountSection, string>>
   updatedAt: number
 }

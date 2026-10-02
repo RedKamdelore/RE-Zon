@@ -4,7 +4,7 @@ export type View =
   | { name: 'home' }
   | { name: 'library'; section: 'songs' | 'albums' | 'playlists' | 'artists' | 'favorites' }
   | { name: 'sources' }
-  | { name: 'search'; query?: string }
+  | { name: 'search'; query?: string; scope?: 'all' | 'library' | 'soundcloud' }
   | { name: 'playlist'; id: string }
   | { name: 'favorites' }
   | { name: 'settings'; page?: 'integrations' | 'updates' | 'data' | 'downloads' }

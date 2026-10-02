@@ -85,6 +85,8 @@
 .full-player-transport .pb-heart{position:static}
 .full-player-transport .pb-center{gap:5px}
 .full-player-transport .pb-controls{order:0}
+.full-player-transport .pb-stop-control{display:inline-flex}
+.full-player-transport .pb-stop-inline{display:none}
 .full-player-transport .pb-right>button{display:inline-flex!important}
 .full-player-transport .pb-right .icon-btn{width:31px;height:34px}
 @keyframes full-ambient-breathe{0%,100%{transform:scale(1) rotate(-8deg) translate(-2%,2%)}50%{transform:scale(1.2) rotate(8deg) translate(3%,-3%)}}

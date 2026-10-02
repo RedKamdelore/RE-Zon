@@ -93,6 +93,32 @@ describe('playerStore', () => {
     expect(calls.play[0].startsWith('media://')).toBe(false)
   })
 
+  it('stops on a rejected network play request instead of skipping through the queue', async () => {
+    engine.play = () => Promise.reject(new Error('Network unavailable'))
+    store = createPlayerStore(engine)
+    const remote: Track = { ...TRACKS[0], id: 'soundcloud:a', sourceId: 'soundcloud', filePath: 'https://example.com/a.mp3' }
+    store.getState().playTracks([remote, TRACKS[1]], 0)
+    await Promise.resolve()
+    expect(store.getState().pos).toBe(0)
+    expect(store.getState().playing).toBe(false)
+    expect(store.getState().playbackError).toContain('Не удалось загрузить запись')
+  })
+
+  it('ignores an old play rejection after the user chooses another track', async () => {
+    let rejectFirst!: (error: Error) => void
+    let calls = 0
+    engine.play = () => ++calls === 1 ? new Promise<void>((_resolve, reject) => { rejectFirst = reject }) : Promise.resolve()
+    store = createPlayerStore(engine)
+    const remote: Track = { ...TRACKS[0], id: 'soundcloud:a', sourceId: 'soundcloud', filePath: 'https://example.com/a.mp3' }
+    store.getState().playTracks([remote, TRACKS[1]], 0)
+    store.getState().next({ manual: true })
+    rejectFirst(new Error('Old stream failed'))
+    await Promise.resolve()
+    expect(store.getState().pos).toBe(1)
+    expect(store.getState().playing).toBe(true)
+    expect(store.getState().playbackError).toBeNull()
+  })
+
   it('next auto at end with repeat off stops playing', () => {
     store.getState().playTracks(TRACKS, 2)
     store.getState().next()
@@ -139,6 +165,20 @@ describe('playerStore', () => {
     store.getState().playTracks(TRACKS, 2)
     store.getState().next({ manual: true })
     expect(store.getState().playing).toBe(false)
+  })
+
+  it('Stop pauses, resets the current track and Play starts it again', () => {
+    store.getState().playTracks(TRACKS, 1)
+    store.getState().seek(42)
+    store.getState().stop()
+    expect(store.getState()).toMatchObject({pos:1,playing:false,currentSec:0})
+    expect(calls.pause).toBe(1)
+    expect(calls.seek.at(-1)).toBe(0)
+    store.getState().togglePlay()
+    expect(store.getState().playing).toBe(true)
+    expect(calls.play).toHaveLength(2)
+    expect(calls.play[1]).toBe(mediaUrl(TRACKS[1].filePath))
+    expect(calls.resume).toBe(0)
   })
 
   it('prev with currentTime > 3 seeks to 0 instead of switching track', () => {
@@ -278,6 +318,19 @@ describe('playerStore', () => {
     const s = store.getState()
     expect(s.order).toEqual([2, 0, 1])
     expect(s.queue[s.order[s.pos]].id).toBe('local:t1')
+  })
+
+  it('plays an upcoming queue position without changing the queue order', () => {
+    store.getState().playTracks(TRACKS, 0)
+    store.getState().moveInQueue(2, 1)
+    store.getState().playQueuePosition(1)
+    const state=store.getState()
+    expect(state.order).toEqual([0,2,1])
+    expect(state.pos).toBe(1)
+    expect(state.queue[state.order[state.pos]].id).toBe('local:t3')
+    expect(calls.play.at(-1)).toBe(mediaUrl(TRACKS[2].filePath))
+    store.getState().playQueuePosition(-1)
+    expect(calls.play).toHaveLength(2)
   })
 
   it('setVolume calls engine and updates state', () => {
@@ -440,6 +493,49 @@ describe('initPlayerSubscriptions', () => {
     expect(calls.play).toHaveLength(1) // ничего нового не загружено
     errSpy.mockRestore()
   })
+
+  it('does not advance through online tracks when a stream fails', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const streams = TRACKS.map((track, i) => ({...track,id:`vk:${i}`,sourceId:'vk',filePath:`https://example.test/${i}.mp3`}))
+    store.getState().playTracks(streams, 0)
+    store.getState().cycleRepeat() // repeat all must not create an error loop
+    initPlayerSubscriptions(engine, store)
+    fire('error')
+    expect(store.getState()).toMatchObject({pos:0,playing:false,currentSec:0})
+    expect(store.getState().playbackError).toContain('Проверьте интернет')
+    expect(calls.play).toHaveLength(1)
+    fire('error') // late event after Stop is ignored
+    expect(calls.play).toHaveLength(1)
+    errSpy.mockRestore()
+  })
+
+  it('uses a local alternative while offline instead of trying another stream', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('navigator',{onLine:false})
+    const remote = {...TRACKS[0],id:'vk:1',sourceId:'vk',filePath:'https://example.test/one.mp3',alternateSources:[
+      {...TRACKS[1],id:'vk:2',sourceId:'vk',filePath:'https://example.test/two.mp3'}, TRACKS[2],
+    ]}
+    try {
+      store.getState().playTracks([remote],0)
+      initPlayerSubscriptions(engine,store)
+      fire('error')
+      expect(store.getState().queue[0].id).toBe(TRACKS[2].id)
+      expect(store.getState().playing).toBe(true)
+      expect(calls.play.at(-1)).toBe(mediaUrl(TRACKS[2].filePath))
+    } finally {vi.unstubAllGlobals();errSpy.mockRestore()}
+  })
+
+  it('stops after two consecutive local source failures', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.getState().playTracks(TRACKS, 0)
+    initPlayerSubscriptions(engine, store)
+    fire('error')
+    expect(store.getState().pos).toBe(1)
+    fire('error')
+    expect(store.getState()).toMatchObject({pos:1,playing:false})
+    expect(calls.play).toHaveLength(2)
+    errSpy.mockRestore()
+  })
 })
 
 describe('crossfade', () => {
@@ -510,17 +606,24 @@ describe('playStats recording', () => {
     useStatsStore.getState().init({})
   })
 
-  it('playTracks records a play for the started track', () => {
-    const { store } = makeXf(0)
+  it('playTracks records a play only after audio confirms it started', () => {
+    const { engine, fire, store } = makeXf(0)
+    initPlayerSubscriptions(engine, store)
     store.getState().playTracks(TRACKS, 1)
+    expect(useStatsStore.getState().stats['local:t2']).toBeUndefined()
+    fire('playing')
     expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
   })
 
   it('next/prev record plays for newly started tracks', () => {
-    const { store } = makeXf(0)
+    const { engine, fire, store } = makeXf(0)
+    initPlayerSubscriptions(engine, store)
     store.getState().playTracks(TRACKS, 0)
+    fire('playing')
     store.getState().next({ manual: true })
+    fire('playing')
     store.getState().prev()
+    fire('playing')
     const stats = useStatsStore.getState().stats
     expect(stats['local:t1']?.count).toBe(2) // playTracks + prev
     expect(stats['local:t2']?.count).toBe(1) // next
@@ -532,13 +635,16 @@ describe('playStats recording', () => {
     initPlayerSubscriptions(engine, store)
     ;(engine.element as { currentTime: number }).currentTime = 175
     fire('timeupdate')
+    fire('playing')
     expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
   })
 
   it('manual next with crossfade records a play', () => {
-    const { store } = makeXf(5)
+    const { engine, fire, store } = makeXf(5)
+    initPlayerSubscriptions(engine, store)
     store.getState().playTracks(TRACKS, 0)
     store.getState().next({ manual: true })
+    fire('playing')
     expect(useStatsStore.getState().stats['local:t2']?.count).toBe(1)
   })
 })
@@ -577,12 +683,14 @@ describe('soundcloud stream resolution', () => {
     expect(scResolveStream).toHaveBeenCalledWith(scTrack.filePath)
   })
 
-  it('skips to the next track when stream resolution fails', async () => {
+  it('stops on a stream resolution error without skipping the queue', async () => {
     const scResolveStream = vi.fn().mockRejectedValue(new Error('HTTP 404'))
     ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
     store.getState().playTracks([scTrack, makeTrack(2)], 0)
-    await vi.waitFor(() => expect(calls.play).toEqual([mediaUrl(makeTrack(2).filePath)]))
-    expect(store.getState().pos).toBe(1)
+    await vi.waitFor(() => expect(store.getState().playing).toBe(false))
+    expect(store.getState().pos).toBe(0)
+    expect(calls.play).toEqual([])
+    expect(store.getState().playbackError).toContain('Проверьте интернет')
   })
 
   it('does not play a stale url if the user switched track during resolution', async () => {
@@ -596,6 +704,36 @@ describe('soundcloud stream resolution', () => {
     resolveIt('https://cf-media.sndcdn.com/late.mp3')
     await Promise.resolve()
     expect(calls.play).toEqual([mediaUrl(makeTrack(2).filePath)])
+  })
+
+  it('does not start a pending stream after Stop and resolves it again on Play', async () => {
+    const pending: Array<(url: string) => void> = []
+    const scResolveStream = vi.fn(() => new Promise<string>(resolve => { pending.push(resolve) }))
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    store.getState().playTracks([scTrack], 0)
+    store.getState().stop()
+    pending[0]('https://cf-media.sndcdn.com/late.mp3')
+    await Promise.resolve()
+    expect(calls.play).toEqual([])
+    store.getState().togglePlay()
+    expect(scResolveStream).toHaveBeenCalledTimes(2)
+    pending[1]('https://cf-media.sndcdn.com/retry.mp3')
+    await vi.waitFor(() => expect(calls.play).toEqual(['https://cf-media.sndcdn.com/retry.mp3']))
+  })
+
+  it('retries resolution when Play follows Pause during a pending stream', async () => {
+    const pending: Array<(url: string) => void> = []
+    const scResolveStream = vi.fn(() => new Promise<string>(resolve => { pending.push(resolve) }))
+    ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
+    store.getState().playTracks([scTrack], 0)
+    store.getState().togglePlay() // pause before the URL resolves
+    pending[0]('https://cf-media.sndcdn.com/old.mp3')
+    await Promise.resolve()
+    expect(calls.play).toEqual([])
+    store.getState().togglePlay()
+    expect(scResolveStream).toHaveBeenCalledTimes(2)
+    pending[1]('https://cf-media.sndcdn.com/new.mp3')
+    await vi.waitFor(() => expect(calls.play).toEqual(['https://cf-media.sndcdn.com/new.mp3']))
   })
 
   it('manual next with crossfade>0 into a SC track resolves the stream before crossfadeTo', async () => {
@@ -628,7 +766,7 @@ describe('soundcloud stream resolution', () => {
     )
   })
 
-  it('crossfade into a SC track skips to the next track when resolution fails', async () => {
+  it('crossfade into an unavailable SC track stops at that track', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const scResolveStream = vi.fn().mockRejectedValue(new Error('HTTP 404'))
     ;(globalThis as Record<string, unknown>).window = { api: { scResolveStream } }
@@ -636,11 +774,9 @@ describe('soundcloud stream resolution', () => {
     xfStore.getState().playTracks([makeTrack(1), scTrack, makeTrack(3)], 0)
     xfStore.getState().next({ manual: true })
     expect(xfStore.getState().pos).toBe(1)
-    await vi.waitFor(() => expect(calls.play).toEqual([
-      mediaUrl(makeTrack(1).filePath),
-      mediaUrl(makeTrack(3).filePath),
-    ]))
-    expect(xfStore.getState().pos).toBe(2)
+    await vi.waitFor(() => expect(xfStore.getState().playing).toBe(false))
+    expect(calls.play).toEqual([mediaUrl(makeTrack(1).filePath)])
+    expect(xfStore.getState().pos).toBe(1)
     expect(calls.crossfade).toHaveLength(0)
     errSpy.mockRestore()
   })
@@ -727,11 +863,18 @@ describe('alternate playback sources',()=>{
   })
 })
 
-it('audio errors try the alternative source before skipping to the next song',()=>{
+it('audio errors try an alternative, then stop if it also fails before playing',()=>{
  const {engine,fire}=makeFakeEngine();const store=createPlayerStore(engine)
  store.getState().playTracks([{...makeTrack(1),alternateSources:[makeTrack(2)]},makeTrack(3)],0)
  const unsubscribe=initPlayerSubscriptions(engine,store)
- try {fire('error');expect(store.getState().pos).toBe(0);expect(store.getState().queue[0].id).toBe('local:t2');fire('error');expect(store.getState().pos).toBe(1)}finally{unsubscribe()}
+ try {fire('error');expect(store.getState().pos).toBe(0);expect(store.getState().queue[0].id).toBe('local:t2');fire('error');expect(store.getState().pos).toBe(0);expect(store.getState().playing).toBe(false)}finally{unsubscribe()}
+})
+
+it('a successful alternative resets the failure counter',()=>{
+ const {engine,fire}=makeFakeEngine();const store=createPlayerStore(engine)
+ store.getState().playTracks([{...makeTrack(1),alternateSources:[makeTrack(2)]},makeTrack(3)],0)
+ const unsubscribe=initPlayerSubscriptions(engine,store)
+ try {fire('error');fire('playing');fire('error');expect(store.getState().pos).toBe(1);expect(store.getState().playing).toBe(true)}finally{unsubscribe()}
 })
 
 it('stops after the last broken source even when repeat is enabled',()=>{

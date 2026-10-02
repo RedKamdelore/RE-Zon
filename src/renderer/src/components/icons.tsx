@@ -29,6 +29,8 @@ export const PlayIcon = ({ size }: IconProps) => icon('M8 5v14l11-7z', size)
 
 export const PauseIcon = ({ size }: IconProps) => icon('M6 5h4v14H6zM14 5h4v14h-4z', size)
 
+export const StopIcon = ({ size }: IconProps) => icon('M6 6h12v12H6z', size)
+
 export const PrevIcon = ({ size }: IconProps) => icon('M6 6h2v12H6zM18 6l-8.5 6L18 18z', size)
 
 export const NextIcon = ({ size }: IconProps) => icon('M16 6h2v12h-2zM6 18l8.5-6L6 6z', size)

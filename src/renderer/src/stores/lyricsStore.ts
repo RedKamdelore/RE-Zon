@@ -1,28 +1,29 @@
 import { create } from 'zustand'
 import { persistPatch } from './playlistStore'
 import type { Track } from '@shared/types'
+import { LYRIC_SOURCE_IDS } from '@shared/lyricsLookup'
 import type { LyricsLookupReport, LyricsLookupResult } from '@shared/lyricsLookup'
 import { parseLrc } from '@shared/lyrics'
 
 interface LyricsState {
   overrides: Record<string, string> // trackId → текст из редактора
+  selections: Record<string, LyricsLookupResult> // trackId → выбранный результат каталога
   offsets: Record<string, number> // trackId → сдвиг строк LRC в секундах
   automatic: Record<string, LyricsLookupResult | null>
   reports: Record<string, LyricsLookupReport>
   searching: Record<string, boolean>
   errors: Record<string, string>
-  init: (overrides: Record<string, string>, offsets?: Record<string, number>) => void // вызывается из App после loadData
+  init: (overrides: Record<string, string>, offsets?: Record<string, number>, selections?: Record<string, LyricsLookupResult>) => void // вызывается из App после loadData
 }
-
-function schedulePersist(overrides: Record<string, string>): void { persistPatch({lyricsOverrides:overrides}) }
 
 export const useLyricsStore = create<LyricsState>()((set) => ({
   overrides: {},
+  selections: {},
   offsets: {},
   automatic: readAutomaticCache(), reports: {}, searching: {}, errors: {},
 
-  init: (overrides, offsets = {}) => {
-    set({ overrides, offsets: Object.fromEntries(Object.entries(offsets).filter(([, value]) => Number.isFinite(value) && Math.abs(value) <= 10)) })
+  init: (overrides, offsets = {}, selections = {}) => {
+    set({ overrides, offsets: Object.fromEntries(Object.entries(offsets).filter(([, value]) => Number.isFinite(value) && Math.abs(value) <= 10)), selections: Object.fromEntries(Object.entries(selections).filter(([, value]) => validSelection(value))) })
   },
 }))
 
@@ -31,9 +32,28 @@ export function getLyricsOverride(trackId: string): string | undefined {
 }
 
 export function setLyricsOverride(trackId: string, text: string): void {
-  const overrides = { ...useLyricsStore.getState().overrides, [trackId]: text }
-  useLyricsStore.setState({ overrides })
-  schedulePersist(overrides)
+  const state = useLyricsStore.getState()
+  const overrides = { ...state.overrides, [trackId]: text }
+  const selections = { ...state.selections }
+  delete selections[trackId]
+  useLyricsStore.setState({ overrides, selections })
+  persistPatch({ lyricsOverrides: overrides, lyricSelections: selections })
+}
+
+function validSelection(value: LyricsLookupResult | undefined): value is LyricsLookupResult {
+  return !!value && typeof value.text === 'string' && value.text.length > 0 && value.text.length <= 50_000 && typeof value.synced === 'boolean' && LYRIC_SOURCE_IDS.includes(value.source)
+}
+
+export function setLyricsSelection(trackId: string, result: LyricsLookupResult | null): void {
+  if (result && !validSelection(result)) return
+  const state = useLyricsStore.getState()
+  const overrides = { ...state.overrides }
+  const selections = { ...state.selections }
+  delete overrides[trackId]
+  if (result) selections[trackId] = result
+  else delete selections[trackId]
+  useLyricsStore.setState({ overrides, selections })
+  persistPatch({ lyricsOverrides: overrides, lyricSelections: selections })
 }
 
 export function setLyricOffset(trackId: string, seconds: number): void {

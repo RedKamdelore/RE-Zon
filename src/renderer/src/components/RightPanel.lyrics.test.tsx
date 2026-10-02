@@ -14,7 +14,7 @@ beforeEach(() => {
   ;(globalThis as Record<string,unknown>).IS_REACT_ACT_ENVIRONMENT=true
   host=document.createElement('div');document.body.append(host);root=createRoot(host)
   usePlayerStore.setState({queue:[track],order:[0],pos:0,currentSec:0,seek:vi.fn()})
-  useLyricsStore.setState({overrides:{},offsets:{},automatic:{},reports:{}})
+  useLyricsStore.setState({overrides:{},selections:{},offsets:{},automatic:{},reports:{}})
   useWorkspaceStore.setState({lyricDrafts:{}})
 })
 afterEach(() => {act(() => root.unmount());host.remove();delete (window as unknown as {api?: unknown}).api;vi.unstubAllGlobals()})
@@ -77,6 +77,25 @@ it('checks every source when the menu opens', async () => {
   await act(async () => {host.querySelector<HTMLButtonElement>('.rp-lyrics-options button')!.click()})
   expect(lookupLyricsReport).toHaveBeenCalledWith(expect.objectContaining({title:'Song',checkAll:true}))
   expect(host.querySelector('.rp-lyrics-sources')?.textContent).toContain('LRCLIBНе нашли')
+})
+it('lets the listener choose a found version and restore automatic selection', () => {
+  useLyricsStore.setState({reports:{[track.id]:{
+    best:null,checkedAll:true,sources:[
+      {source:'lrclib',status:'both',result:{text:'[00:02]Другой текст',plainText:'Обычная версия',synced:true,source:'lrclib'}},
+    ],
+  }}})
+  act(() => root.render(<RightPanel panel="lyrics" onClose={()=>{}}/>))
+  act(() => host.querySelector<HTMLButtonElement>('.rp-lyrics-options button')!.click())
+  const source = host.querySelector('.rp-lyrics-source')!
+  act(() => Array.from(source.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Выбрать синхронный')!.click())
+  expect(host.querySelector('.rp-lyrics-timed')?.textContent).toContain('Другой текст')
+  expect(host.querySelector('.rp-lyrics-current')?.textContent).toContain('LRCLIB · выбран вручную · синхронный')
+  act(() => Array.from(source.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent === 'Выбрать обычный')!.click())
+  expect(host.querySelector('.rp-lyrics-text')?.textContent).toBe('Обычная версия')
+  expect(host.querySelector('.rp-lyrics-current')?.textContent).toContain('LRCLIB · выбран вручную · обычный')
+  act(() => Array.from(host.querySelectorAll<HTMLButtonElement>('.rp-lyrics-menu-actions button')).find(button => button.textContent === 'Вернуть автоматический выбор')!.click())
+  expect(host.querySelector('.rp-lyrics-timed')?.textContent).toContain('Первая')
+  expect(useLyricsStore.getState().selections[track.id]).toBeUndefined()
 })
 it('closes the sources menu with Escape or an outside click', () => {
   act(() => root.render(<RightPanel panel="lyrics" onClose={()=>{}}/>))

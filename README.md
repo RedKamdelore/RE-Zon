@@ -107,7 +107,7 @@ npm run dev
 
 - [Концепция интерфейса Atlas](docs/design-reboot-2026-09-18.md)
 - [Сборка и выпуск обновлений](docs/releases/README.md)
-- [Изменения и сценарии тестирования 0.4.0-beta.1](docs/releases/0.4.0-beta.1.md)
+- [Что изменилось в 0.4.0-beta.9](docs/releases/0.4.0-beta.9.md)
 
 ---
 

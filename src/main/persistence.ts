@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, renameSync, existsSync, copyFileSync } from 'fs'
 import { join } from 'path'
 import type { PersistedData } from '../shared/types'
 import { BUILTIN_PRESETS, defaultTheme } from '../shared/themeModel'
@@ -10,6 +10,7 @@ export const DEFAULT_DATA: PersistedData = {
   musicFolders: [],
   playlists: [],
   lyricsOverrides: {},
+  lyricSelections: {},
   lyricOffsets: {},
   volume: 0.8,
   eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -133,26 +134,62 @@ export function mergeWithDefaults(
 }
 
 let cache: PersistedData | null = null
+let recoveredFromBackup = false
 
 function dataPath(): string {
   return join(app.getPath('userData'), 'player-data.json')
 }
 
+function parseProfile(path: string): PersistedData {
+  const raw: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid profile object')
+  const data = raw as Record<string, unknown>
+  if (!Number.isInteger(data.version) || (data.version as number) < 1 || (data.version as number) > 4) throw new Error('Unsupported profile version')
+  if (data.musicFolders !== undefined && !Array.isArray(data.musicFolders)) throw new Error('Invalid music folders')
+  if (data.playlists !== undefined && !Array.isArray(data.playlists)) throw new Error('Invalid playlists')
+  if (data.importedTracks !== undefined && !Array.isArray(data.importedTracks)) throw new Error('Invalid imported tracks')
+  return mergeWithDefaults(data as Partial<PersistedData>)
+}
+
+export function profileRecoveryStatus(): { recovered: boolean } {
+  return { recovered: recoveredFromBackup }
+}
+
 export function loadData(): PersistedData {
   if (cache) return cache
-  try {
-    cache = mergeWithDefaults(
-      existsSync(dataPath()) ? JSON.parse(readFileSync(dataPath(), 'utf-8')) : null,
-    )
-  } catch {
+  const path = dataPath()
+  if (!existsSync(path)) {
     cache = mergeWithDefaults(null)
+    return cache
+  }
+  try { cache = parseProfile(path) }
+  catch (primaryError) {
+    const backup = path + '.bak'
+    let restored: PersistedData
+    try { restored = parseProfile(backup) }
+    catch { throw new Error('Не удалось прочитать профиль и резервную копию. Откройте папку профиля и восстановите player-data.json вручную.', { cause: primaryError }) }
+    // Keep the damaged original for diagnosis. Never replace it with defaults.
+    copyFileSync(path, `${path}.corrupt-${Date.now()}-${process.pid}`)
+    copyFileSync(backup, path + '.tmp')
+    renameSync(path + '.tmp', path)
+    cache = restored
+    recoveredFromBackup = true
   }
   return cache
 }
 
 export function saveData(data: PersistedData): void {
-  const tmp = dataPath() + '.tmp'
+  const path = dataPath()
+  if (!cache && existsSync(path)) loadData() // refuse to overwrite an unreadable profile
+  if (data.version !== 4 || !Array.isArray(data.playlists) || !Array.isArray(data.musicFolders) || !Array.isArray(data.importedTracks)) throw new Error('Invalid profile data')
+  if (existsSync(path)) {
+    parseProfile(path)
+    const backup = path + '.bak'
+    copyFileSync(path, backup + '.tmp')
+    renameSync(backup + '.tmp', backup)
+  }
+  const tmp = path + '.tmp'
   writeFileSync(tmp, JSON.stringify(data, null, 2))
-  renameSync(tmp, dataPath()) // атомарная запись
+  renameSync(tmp, path) // атомарная запись
   cache = data
 }

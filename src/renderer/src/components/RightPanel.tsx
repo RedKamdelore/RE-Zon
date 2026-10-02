@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Track } from '@shared/types'
 import { upcomingPositions } from '@shared/queue'
 import { usePlayerStore } from '../stores/playerStore'
-import { useLyricsStore, setLyricsOverride, setLyricOffset, searchLyrics } from '../stores/lyricsStore'
+import { useLyricsStore, setLyricsOverride, setLyricsSelection, setLyricOffset, searchLyrics } from '../stores/lyricsStore'
 import { fmt } from '../utils/format'
 import { CloseIcon, MusicNoteIcon } from './icons'
 import Equalizer from './Equalizer'
@@ -55,6 +55,7 @@ export function QueuePanel({ showCurrent = true }: { showCurrent?: boolean } = {
   const pos = usePlayerStore((s) => s.pos)
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue)
   const moveInQueue = usePlayerStore((s) => s.moveInQueue)
+  const playQueuePosition = usePlayerStore((s) => s.playQueuePosition)
   // Позиция (в order-space) перетаскиваемой строки; ref, т.к. ререндер не нужен
   const dragPos = useRef<number | null>(null)
 
@@ -102,11 +103,13 @@ export function QueuePanel({ showCurrent = true }: { showCurrent?: boolean } = {
                 dragPos.current = null
               }}
             >
-              <Cover track={track} />
-              <span className="rp-row-text">
-                <span className="rp-row-title">{track.title}</span>
-                <span className="rp-row-artist">{track.artist}</span>
-              </span>
+              <button className="rp-row-play" aria-label={`Слушать из очереди: ${track.title}`} onClick={() => playQueuePosition(position)}>
+                <Cover track={track} />
+                <span className="rp-row-text">
+                  <span className="rp-row-title">{track.title}</span>
+                  <span className="rp-row-artist">{track.artist}</span>
+                </span>
+              </button>
               <span className="rp-row-duration">{fmt(track.durationSec)}</span>
               <button className="icon-btn queue-move" aria-label={`Выше: ${track.title}`} disabled={position === upcoming[0]} onClick={() => moveInQueue(position, position - 1)}>↑</button>
               <button className="icon-btn queue-move" aria-label={`Ниже: ${track.title}`} disabled={position === upcoming[upcoming.length - 1]} onClick={() => moveInQueue(position, position + 1)}>↓</button>
@@ -134,6 +137,7 @@ export function LyricsPanel() {
   const currentSec = usePlayerStore((s) => s.currentSec)
   const seek = usePlayerStore((s) => s.seek)
   const overrides = useLyricsStore((s) => s.overrides)
+  const selections = useLyricsStore((s) => s.selections)
   const offsets = useLyricsStore((s) => s.offsets)
   const automatic = useLyricsStore((s) => s.automatic)
   const reports = useLyricsStore((s) => s.reports)
@@ -158,11 +162,12 @@ export function LyricsPanel() {
   const setEditing = (value:boolean) => { if(trackId&&!value)useWorkspaceStore.getState().setLyricDraft(trackId,undefined) }
 
   const hasOverride = !!trackId && Object.prototype.hasOwnProperty.call(overrides, trackId)
+  const chosen = trackId ? selections[trackId] : undefined
   const found = trackId ? automatic[trackId] : undefined
   const report = trackId ? reports[trackId] : undefined
   const offsetSec = trackId ? offsets[trackId] ?? 0 : 0
   const embeddedSynced = !!track?.lyrics && parseLrc(track.lyrics).length > 0
-  const lyrics = track ? hasOverride ? overrides[track.id] : embeddedSynced ? track.lyrics : found?.synced ? found.text : track.lyrics || found?.text : undefined
+  const lyrics = track ? hasOverride ? overrides[track.id] : chosen ? chosen.text : embeddedSynced ? track.lyrics : found?.synced ? found.text : track.lyrics || found?.text : undefined
   const timed = useMemo(() => parseLrc(lyrics ?? ''), [lyrics])
   const active = activeLyricIndex(timed, currentSec - offsetSec)
   followRef.current = follow
@@ -248,6 +253,7 @@ export function LyricsPanel() {
 
   let currentOrigin = 'Не найден'
   if (hasOverride) currentOrigin = 'Мой текст'
+  else if (chosen) currentOrigin = `${LYRIC_SOURCE_NAMES[chosen.source]}${chosen.provider ? ` · ${chosen.provider}` : ''} · выбран вручную`
   else if (embeddedSynced || (track.lyrics && !found?.synced)) currentOrigin = track.sourceId === 'local' ? 'Теги файла' : 'Данные трека'
   else if (found) currentOrigin = `${LYRIC_SOURCE_NAMES[found.source]}${found.provider ? ` · ${found.provider}` : ''}`
   const sourceEntries: LyricsSourceStatus[] = LYRIC_SOURCE_IDS.map(source =>
@@ -265,14 +271,19 @@ export function LyricsPanel() {
     </div>
     <div className="rp-lyrics-sources" aria-live="polite">
       <span className="rp-lyrics-menu-label">{report?.demo ? 'Пример статусов · источники не опрашивались' : 'Результаты поиска'}</span>
-      {sourceEntries.map(entry => <div className={'rp-lyrics-source'+(found?.source === entry.source && !hasOverride && !embeddedSynced ? ' selected' : '')} key={entry.source}>
+      {sourceEntries.map(entry => <div className={'rp-lyrics-source'+((chosen?.source === entry.source || (!chosen && found?.source === entry.source && !hasOverride && !embeddedSynced)) ? ' selected' : '')} key={entry.source}>
         <strong>{LYRIC_SOURCE_NAMES[entry.source]}{entry.result?.provider ? ` · ${entry.result.provider}` : ''}</strong>
         <span>{lyricSourceSummary(entry, !!(trackId && searching[trackId]), !!window.api?.lookupLyricsReport)}</span>
         {entry.result && <span className="rp-lyrics-preview">{entry.status === 'both' ? 'С таймкодами: ' : ''}{lyricPreview(entry.result.text)}</span>}
         {entry.result?.plainText && <span className="rp-lyrics-preview">Обычный: {lyricPreview(entry.result.plainText)}</span>}
+        {entry.result && <div className="rp-lyrics-source-actions">
+          <button type="button" onClick={() => setLyricsSelection(track.id, entry.result!)} disabled={chosen?.source === entry.source && chosen.text === entry.result.text}>{entry.result.synced ? 'Выбрать синхронный' : 'Выбрать обычный'}</button>
+          {entry.result.plainText && <button type="button" onClick={() => setLyricsSelection(track.id, { ...entry.result!, text: entry.result!.plainText!, synced: false })} disabled={chosen?.source === entry.source && chosen.text === entry.result.plainText}>Выбрать обычный</button>}
+        </div>}
       </div>)}
     </div>
     <div className="rp-lyrics-menu-actions">
+      {(chosen || hasOverride) && <button className="btn-outline" onClick={() => setLyricsSelection(track.id, null)}>Вернуть автоматический выбор</button>}
       <button className="btn-outline" onClick={() => void searchLyrics(track, true)} disabled={!!(trackId && searching[trackId]) || !window.api?.lookupLyricsReport} title={!window.api?.lookupLyricsReport ? 'Поиск доступен в приложении Re:Zon' : undefined}>{trackId && searching[trackId] ? 'Проверяем источники…' : 'Проверить все источники'}</button>
       <button className="btn-outline" onClick={startEdit}>{lyrics ? 'Изменить текст' : 'Добавить текст'}</button>
       <button className="btn-outline" onClick={() => void importLrc()}>{lyrics ? 'Заменить из LRC…' : 'Загрузить LRC…'}</button>
@@ -324,7 +335,7 @@ export function LyricsPanel() {
   return (
     <>
       {timed.length ? <>
-        <div className="rp-lyrics-toolbar"><span className="muted">Текст синхронизирован с треком{!hasOverride && found?.synced ? ` · ${LYRIC_SOURCE_NAMES[found.source] ?? found.source}` : ''}</span>{!follow && <button className="text-button" onClick={() => setFollow(true)}>К текущей строке</button>}</div>
+        <div className="rp-lyrics-toolbar"><span className="muted">Текст синхронизирован с треком{!hasOverride && (chosen ?? found)?.synced ? ` · ${LYRIC_SOURCE_NAMES[(chosen ?? found)!.source] ?? (chosen ?? found)!.source}` : ''}</span>{!follow && <button className="text-button" onClick={() => setFollow(true)}>К текущей строке</button>}</div>
         <div className="rp-lyrics-sync" aria-label="Настройка синхронизации текста">
           <span>Сдвиг текста</span>
           <button type="button" onClick={() => setLyricOffset(track.id, offsetSec - 0.5)} disabled={offsetSec <= -10} title="Показывать строки на 0,5 секунды раньше">Раньше</button>

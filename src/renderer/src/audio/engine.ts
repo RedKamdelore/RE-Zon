@@ -94,24 +94,22 @@ export class AudioEngine {
     return this.decks.map((d) => d.el)
   }
 
-  play(url: string): void {
+  play(url: string): Promise<void> {
     this.stopInactive()
     const deck = this.active
     deck.gain.gain.cancelScheduledValues(this.ctx.currentTime)
     deck.gain.gain.value = 1
     deck.el.src = url
-    void this.ctx.resume()
-    // catch: AbortError при быстрой смене src (play() прерывается новым load) — не ошибка
-    deck.el.play().catch(() => {})
+    void this.ctx.resume().catch(error => console.warn('Audio context could not resume:', error))
+    return deck.el.play()
   }
   pause(): void {
     // Паузим обе деки: иначе затихающая при кроссфейде доиграла бы вслух
     for (const deck of this.decks) deck.el.pause()
   }
-  resume(): void {
-    void this.ctx.resume()
-    // catch: AbortError при быстрой смене src — не ошибка
-    this.active.el.play().catch(() => {})
+  resume(): Promise<void> {
+    void this.ctx.resume().catch(error => console.warn('Audio context could not resume:', error))
+    return this.active.el.play()
   }
   /** Устанавливает src без воспроизведения ('' — очистить) */
   load(url: string): void {
@@ -145,10 +143,9 @@ export class AudioEngine {
    * (equal-power setValueCurveAtTime по времени AudioContext), деки меняются местами.
    * Старая дека останавливается после затихания. durationSec <= 0 — жёсткое переключение.
    */
-  crossfadeTo(url: string, durationSec: number): void {
+  crossfadeTo(url: string, durationSec: number): Promise<void> {
     if (durationSec <= 0) {
-      this.play(url)
-      return
+      return this.play(url)
     }
     if (this.stopTimer !== null) {
       clearTimeout(this.stopTimer)
@@ -165,9 +162,8 @@ export class AudioEngine {
     from.gain.gain.setValueAtTime(1, now)
     from.gain.gain.setValueCurveAtTime(fadeOut, now, durationSec)
     to.el.src = url
-    void this.ctx.resume()
-    // catch: AbortError при быстрой смене src — не ошибка
-    to.el.play().catch(() => {})
+    void this.ctx.resume().catch(error => console.warn('Audio context could not resume:', error))
+    const started = to.el.play()
     this.activeIndex = 1 - this.activeIndex
     // ended старой деки стор игнорирует (неактивная), но src всё равно снимаем после затихания
     this.stopTimer = setTimeout(() => {
@@ -175,6 +171,7 @@ export class AudioEngine {
       from.el.removeAttribute('src')
       this.stopTimer = null
     }, durationSec * 1000 + 100)
+    return started
   }
 
   /** Жёсткая остановка неактивной деки и отмена pending-останова (play при смене трека) */

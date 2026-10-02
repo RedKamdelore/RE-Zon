@@ -27,7 +27,7 @@ export class TrayPopup {
     ipcMain.handle('tray:state', () => this.state)
     ipcMain.on('tray:command', (event, command: string) => {
       if (event.sender !== this.window?.webContents || typeof command !== 'string') return
-      if (['toggle','next','prev'].includes(command) || /^seek:\d+(\.\d+)?$/.test(command)) this.send(command)
+      if (['toggle','stop','next','prev'].includes(command) || /^seek:\d+(\.\d+)?$/.test(command)) this.send(command)
     })
     ipcMain.on('tray:showMain', event => { if (event.sender === this.window?.webContents) { this.hide(); this.showMain() } })
     ipcMain.on('tray:hide', event => { if (event.sender === this.window?.webContents) this.hide() })

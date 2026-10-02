@@ -20,6 +20,7 @@ export function createTray(actions: { show: () => void; showPopup: (bounds: Rect
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Воспроизвести/Пауза', click: () => send('toggle') },
+      { label: 'Стоп', click: () => send('stop') },
       { label: 'Следующий трек', click: () => send('next') },
       { label: 'Предыдущий трек', click: () => send('prev') },
       { type: 'separator' },

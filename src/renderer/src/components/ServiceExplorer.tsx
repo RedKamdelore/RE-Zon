@@ -44,6 +44,6 @@ export default function ServiceExplorer() {
         </div>
       </details>
     })}
-    <button className="service-section side-sc" onClick={()=>setView({name:'search'})}>SoundCloud <span>Поиск музыки ↗</span></button>
+    <button className="service-section side-sc" onClick={()=>setView({name:'search',scope:'soundcloud'})}>SoundCloud <span>Поиск музыки ↗</span></button>
   </nav>
 }

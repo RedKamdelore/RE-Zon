@@ -9,15 +9,15 @@ import { isScrobblable, flushSoon, enqueueScrobble } from '../scrobbler'
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
   readonly element: HTMLAudioElement
-  play: (url: string) => void
+  play: (url: string) => void | Promise<void>
   pause: () => void
-  resume: () => void
+  resume: () => void | Promise<void>
   seek: (sec: number) => void
   setVolume: (v: number) => void
   setEqGain: (band: number, db: number) => void
   getLevel?: () => number
   load: (url: string) => void // src без воспроизведения ('' — очистить)
-  crossfadeTo?: (url: string, durationSec: number) => void // двухдековый движок; вызовы защищены проверкой
+  crossfadeTo?: (url: string, durationSec: number) => void | Promise<void> // двухдековый движок; вызовы защищены проверкой
   elements?: HTMLAudioElement[] // элементы всех дек (подписки); по умолчанию [element]
 }
 
@@ -26,6 +26,7 @@ export interface PlayerState {
   order: number[] // позиции проигрывания (индексы queue); при shuffle — перемешаны
   pos: number // текущая позиция ВНУТРИ order
   playing: boolean
+  playbackError: string | null
   shuffle: boolean
   repeat: RepeatMode
   currentSec: number
@@ -33,6 +34,7 @@ export interface PlayerState {
   eqGains: number[] // 10 × dB
   playTracks: (tracks: Track[], startIndex: number) => void
   togglePlay: () => void
+  stop: () => void
   next: (opts?: { manual?: boolean; failed?: boolean }) => void
   prev: () => void
   seek: (sec: number) => void
@@ -45,12 +47,16 @@ export interface PlayerState {
   playNext: (track: Track) => void // вставка сразу после текущей позиции в order
   removeFromQueue: (position: number) => void // position внутри order
   moveInQueue: (fromPos: number, toPos: number) => void
+  playQueuePosition: (position: number) => void
   /** Внутренний триггер автокроссфейда — вызывается из timeupdate-подписки */
   retryAlternative: () => boolean
+  failCurrent: () => void
+  markPlaybackStarted: () => void
   maybeStartCrossfade: () => void
 }
 
 const identityOrder = (length: number): number[] => Array.from({ length }, (_, i) => i)
+const isNetworkTrack = (track: Track): boolean => /^https?:\/\//i.test(track.filePath) || !['local', 'demo'].includes(track.sourceId)
 
 /**
  * getCrossfadeSec инжектируется (тесты передают своё значение);
@@ -64,6 +70,11 @@ export function createPlayerStore(
   // срабатывания на каждый timeupdate в окне затихания. Перевзводится на
   // playTracks/next/prev и при выходе из окна конца трека (новый трек, seek назад).
   let crossfadeDone = false
+  let startRevision = 0
+  let consecutiveFailures = 0
+  let stopped = false
+  let resolving = false
+  let pendingPlayId: string | null = null
   return create<PlayerState>()((set, get) => {
   /**
    * SoundCloud: filePath — transcoding API URL (отдаёт JSON {url}), финальный
@@ -108,25 +119,35 @@ export function createPlayerStore(
     },() => engine.load(''))
   }
 
+  const watchStart = (result: void | Promise<void>, revision: number, trackId: string): void => {
+    if (!result || typeof result.then !== 'function') return
+    void result.catch(error => {
+      if (error instanceof Error && error.name === 'AbortError') return
+      const current = get().queue[get().order[get().pos]]
+      if (revision === startRevision && get().playing && current?.id === trackId) get().failCurrent()
+    })
+  }
+
   const playAt = (state: Pick<PlayerState, 'queue' | 'order' | 'next'>, pos: number): void => {
     const track = state.queue[state.order[pos]]
-    // Ошибка резолва — как у мёртвого файла: пропускаем трек (auto-семантика next).
+    const revision = ++startRevision
+    resolving = true
     resolvePlayableUrl(
       track,
       (url) => {
         // За время резолва пользователь мог переключить трек — не переигрываем
         const current = get().queue[get().order[get().pos]]
-        if (current?.id === track.id) { engine.play(url); saveDirectAfterPlay(track) }
+        if (revision === startRevision) resolving = false
+        if (revision === startRevision && get().playing && current?.id === track.id) { pendingPlayId = track.id; watchStart(engine.play(url), revision, track.id); saveDirectAfterPlay(track) }
       },
       (e) => {
-        console.error('soundcloud resolve failed, skipping:', e)
+        console.error('soundcloud resolve failed:', e)
         const current = get().queue[get().order[get().pos]]
-        if (current?.id === track.id && !get().retryAlternative()) state.next({failed:true})
+        if (revision === startRevision) resolving = false
+        if (revision === startRevision && get().playing && current?.id === track.id) get().failCurrent()
       },
     )
-    // Статистика прослушиваний: пишем именно в точке реального старта трека
-    // (playTracks/next/prev). Кроссфейд-пути зовут recordPlay сами (см. ниже).
-    recordPlay(track.id)
+    // The playing event confirms the audio actually started before statistics are recorded.
   }
 
   // Кроссфейд: URL резолвится так же, как в playAt (SoundCloud — финальный mp3,
@@ -134,19 +155,24 @@ export function createPlayerStore(
   // pos уже переключён на трек; стейл-проверка и ошибка-резолва общие с playAt.
   const crossfadeToTrack = (track: Track, xfSec: number): void => {
     if (!engine.crossfadeTo) return
+    const revision = ++startRevision
+    resolving = true
     resolvePlayableUrl(
       track,
       (url) => {
         // За время резолва пользователь мог переключить трек — не переигрываем
         const current = get().queue[get().order[get().pos]]
-        if (current?.id !== track.id) return
-        engine.crossfadeTo?.(url, xfSec)
+        if (revision === startRevision) resolving = false
+        if (revision !== startRevision || !get().playing || current?.id !== track.id) return
+        pendingPlayId = track.id
+        watchStart(engine.crossfadeTo?.(url, xfSec), revision, track.id)
         saveDirectAfterPlay(track)
       },
       (e) => {
-        console.error('soundcloud resolve failed, skipping:', e)
+        console.error('soundcloud resolve failed:', e)
         const current = get().queue[get().order[get().pos]]
-        if (current?.id === track.id && !get().retryAlternative()) get().next()
+        if (revision === startRevision) resolving = false
+        if (revision === startRevision && get().playing && current?.id === track.id) get().failCurrent()
       },
     )
   }
@@ -156,16 +182,51 @@ export function createPlayerStore(
       const state=get(), index=state.order[state.pos], current=state.queue[index]
       const alternatives=current?.alternateSources ?? []
       if(!alternatives.length)return false
-      const [next,...remaining]=alternatives
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+      const alternativeIndex = offline ? alternatives.findIndex(track => !isNetworkTrack(track)) : 0
+      if (alternativeIndex < 0) return false
+      const next = alternatives[alternativeIndex]
+      const remaining = alternatives.filter((_, i) => i !== alternativeIndex)
       const queue=state.queue.map((t,i)=>i===index?{...next,alternateSources:remaining}:t)
-      set({queue,currentSec:0,playing:true})
+      stopped = false
+      set({queue,currentSec:0,playing:true,playbackError:null})
       playAt(get(),state.pos)
       return true
+    },
+    failCurrent: () => {
+      const state = get()
+      if (!state.playing || !state.order.length) return
+      const track = state.queue[state.order[state.pos]]
+      if (!track) return
+      consecutiveFailures++
+      if (consecutiveFailures < 2 && state.retryAlternative()) return
+      if (isNetworkTrack(track) || consecutiveFailures >= 2) {
+        state.stop()
+        set({playbackError: isNetworkTrack(track)
+          ? 'Не удалось загрузить запись. Проверьте интернет и нажмите «Слушать», чтобы повторить.'
+          : 'Не удалось воспроизвести записи. Проверьте файлы и попробуйте снова.'})
+        return
+      }
+      state.next({failed:true})
+      if (!get().playing) {
+        get().stop()
+        set({playbackError:'Не удалось воспроизвести запись. Проверьте файл и попробуйте снова.'})
+      }
+    },
+    markPlaybackStarted: () => {
+      if (!get().playing) return
+      consecutiveFailures = 0
+      const track=get().queue[get().order[get().pos]]
+      if (track && pendingPlayId === track.id) {
+        pendingPlayId = null
+        recordPlay(track.id)
+      }
     },
     queue: [],
     order: [],
     pos: 0,
     playing: false,
+    playbackError: null,
     shuffle: false,
     repeat: 'off',
     currentSec: 0,
@@ -175,10 +236,12 @@ export function createPlayerStore(
     playTracks: (tracks, startIndex) => {
       if (tracks.length === 0) return
       crossfadeDone = false
+      consecutiveFailures = 0
+      stopped = false
       const shuffle = get().shuffle
       const order = shuffle ? buildShuffleOrder(tracks.length, startIndex) : identityOrder(tracks.length)
       const pos = shuffle ? 0 : startIndex // при shuffle order[0] === startIndex
-      set({ queue: tracks, order, pos, playing: true, currentSec: 0 })
+      set({ queue: tracks, order, pos, playing: true, currentSec: 0, playbackError: null })
       engine.setVolume(get().volume)
       get().eqGains.forEach((db, band) => engine.setEqGain(band, db))
       playAt(get(), pos)
@@ -188,19 +251,43 @@ export function createPlayerStore(
       const { playing, queue } = get()
       if (queue.length === 0) return
       if (playing) {
+        if (resolving) { ++startRevision; resolving = false; stopped = true }
         engine.pause()
         set({ playing: false })
         flushSoon() // пауза — отправляем накопленные скробблы (V3-4c)
       } else {
-        engine.resume()
-        set({ playing: true })
+        set({ playing: true, playbackError: null })
+        if (stopped) {
+          stopped = false
+          consecutiveFailures = 0
+          playAt(get(), get().pos)
+        } else {
+          const revision = startRevision
+          const current = get().queue[get().order[get().pos]]
+          watchStart(engine.resume(), revision, current?.id ?? '')
+        }
       }
+    },
+
+    stop: () => {
+      if (!get().order.length) return
+      ++startRevision // ignore a stream URL that resolves after Stop
+      resolving = false
+      crossfadeDone = false
+      stopped = true
+      pendingPlayId = null
+      engine.pause()
+      try { engine.seek(0) } catch { /* A source may fail before it can seek. */ }
+      set({playing:false,currentSec:0,playbackError:null})
+      flushSoon()
     },
 
     next: (opts) => {
       const { order, pos, repeat, queue } = get()
       if (order.length === 0) return
       crossfadeDone = false
+      if (!opts?.failed) consecutiveFailures = 0
+      stopped = false
       // Ручной skip всегда двигается вперёд: repeat 'one' трактуем как 'all',
       // иначе nextIndex() вернул бы ту же позицию (см. review note).
       const effectiveRepeat = opts?.failed ? 'off' : opts?.manual && repeat === 'one' ? 'all' : repeat
@@ -212,10 +299,9 @@ export function createPlayerStore(
       }
       // Ручной skip на ходу с кроссфейдером — плавный переход вместо жёсткого play
       const xfSec = opts?.manual && get().playing ? getCrossfadeSec() : 0
-      set({ pos: nextPos, currentSec: 0, playing: true })
+      set({ pos: nextPos, currentSec: 0, playing: true, playbackError: null })
       if (xfSec > 0 && engine.crossfadeTo) {
         crossfadeToTrack(queue[order[nextPos]], xfSec)
-        recordPlay(queue[order[nextPos]].id)
         return
       }
       playAt({ queue, order, next: get().next }, nextPos)
@@ -225,13 +311,15 @@ export function createPlayerStore(
       const { order, pos, queue } = get()
       if (order.length === 0) return
       crossfadeDone = false // prev — всегда жёсткое переключение
+      consecutiveFailures = 0
+      stopped = false
       // Spotify-поведение: если трек играет > 3 сек — перемотка в начало
       if (engine.element.currentTime > 3) {
         get().seek(0)
         return
       }
       const prevPos = prevIndex(order, pos)
-      set({ pos: prevPos, currentSec: 0, playing: true })
+      set({ pos: prevPos, currentSec: 0, playing: true, playbackError: null })
       playAt({ queue, order, next: get().next }, prevPos)
     },
 
@@ -351,6 +439,17 @@ export function createPlayerStore(
       set({ order: newOrder, pos: newOrder.indexOf(currentQueueIndex) })
     },
 
+    playQueuePosition: (position) => {
+      const { order } = get()
+      if (!Number.isInteger(position) || position < 0 || position >= order.length) return
+      crossfadeDone = false
+      consecutiveFailures = 0
+      stopped = false
+      engine.pause()
+      set({ pos: position, currentSec: 0, playing: true, playbackError: null })
+      playAt(get(), position)
+    },
+
     // Автокроссфейд: за crossfadeSec до конца трека запускает equal-power переход
     // на следующий (auto-next семантика nextIndex), pos переключается сразу —
     // UI показывает новый трек с начала затихания. repeat 'one' и crossfadeSec=0
@@ -374,7 +473,6 @@ export function createPlayerStore(
       crossfadeDone = true
       set({ pos: nextPos, currentSec: 0, playing: true })
       crossfadeToTrack(queue[order[nextPos]], xfSec)
-      recordPlay(queue[order[nextPos]].id)
     },
   }
   })
@@ -445,6 +543,9 @@ export function initPlayerSubscriptions(
   const elements = engine.elements ?? [engine.element]
   const fromActiveDeck = (e: Event): boolean => !e.target || e.target === engine.element
   for (const el of elements) {
+    el.addEventListener('playing', (e) => {
+      if (fromActiveDeck(e)) store.getState().markPlaybackStarted()
+    }, { signal })
     el.addEventListener(
       'timeupdate',
       (e) => {
@@ -483,10 +584,10 @@ export function initPlayerSubscriptions(
       'error',
       (e) => {
         if (!fromActiveDeck(e)) return
-        // Файл удалён/перемещён: без обработчика плеер вечно «играет» мёртвый src,
-        // а auto-advance умирает. Пропускаем трек с auto-семантикой (учитывает repeat).
+        // Сетевая ошибка не должна промотать всю очередь. Локальный файл можно
+        // пропустить один раз, но цепочка ошибок останавливает воспроизведение.
         console.error('audio source failed')
-        if (!store.getState().retryAlternative()) store.getState().next({failed:true})
+        store.getState().failCurrent()
       },
       { signal },
     )

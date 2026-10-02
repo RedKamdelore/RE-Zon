@@ -27,7 +27,7 @@ function render(next: TrayPlayerState): void {
   $('placeholder').hidden = !!art
   play.textContent = next.playing ? 'Ⅱ' : '▶'
   play.setAttribute('aria-label',next.playing ? 'Пауза' : 'Воспроизвести')
-  for (const id of ['prev','play','next']) (document.getElementById(id) as HTMLButtonElement).disabled = !next.hasTrack
+  for (const id of ['prev','play','stop','next']) (document.getElementById(id) as HTMLButtonElement).disabled = !next.hasTrack
   seek.disabled = !next.hasTrack || next.durationSec <= 0
   seek.max = String(Math.max(1,next.durationSec))
   if (!dragging) seek.value = String(Math.min(next.currentSec,next.durationSec || 1))
@@ -35,7 +35,7 @@ function render(next: TrayPlayerState): void {
   $('duration').textContent = fmt(next.durationSec)
 }
 
-for (const command of ['prev','next'] as const) $(command).addEventListener('click',()=>window.trayApi.command(command))
+for (const command of ['prev','stop','next'] as const) $(command).addEventListener('click',()=>window.trayApi.command(command))
 play.addEventListener('click',()=>window.trayApi.command('toggle'))
 $('open').addEventListener('click',()=>window.trayApi.showMain())
 seek.addEventListener('pointerdown',()=>{dragging=true})
