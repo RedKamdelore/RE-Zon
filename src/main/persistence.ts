@@ -159,6 +159,17 @@ export function loadData(): PersistedData {
   if (cache) return cache
   const path = dataPath()
   if (!existsSync(path)) {
+    const backup = path + '.bak'
+    if (existsSync(backup)) {
+      let restored: PersistedData
+      try { restored = parseProfile(backup) }
+      catch { throw new Error('Основной профиль отсутствует, а резервная копия повреждена. Восстановите player-data.json вручную.') }
+      copyFileSync(backup, path + '.tmp')
+      renameSync(path + '.tmp', path)
+      cache = restored
+      recoveredFromBackup = true
+      return cache
+    }
     cache = mergeWithDefaults(null)
     return cache
   }
@@ -180,7 +191,7 @@ export function loadData(): PersistedData {
 
 export function saveData(data: PersistedData): void {
   const path = dataPath()
-  if (!cache && existsSync(path)) loadData() // refuse to overwrite an unreadable profile
+  if (!cache && (existsSync(path) || existsSync(path + '.bak'))) loadData() // refuse to overwrite an unreadable profile
   if (data.version !== 4 || !Array.isArray(data.playlists) || !Array.isArray(data.musicFolders) || !Array.isArray(data.importedTracks)) throw new Error('Invalid profile data')
   if (existsSync(path)) {
     parseProfile(path)

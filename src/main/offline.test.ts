@@ -1,5 +1,6 @@
+import {createHash} from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { rmdirSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { OfflineDownloads } from './offline'
@@ -67,4 +68,15 @@ describe('direct offline downloads', () => {
     await ready(manager,'saved')
     expect(manager.resolve(request.trackId)).not.toBeNull()
   })
+})
+
+it('reports file-open failure as a recoverable download error',async()=>{
+ const part=join(root,createHash('sha256').update(request.trackId).digest('hex')+'.mp3.part')
+ mkdirSync(part)
+ const manager=new OfflineDownloads(root,()=>{},vi.fn(async()=>audio()) as unknown as typeof fetch)
+ manager.queue(request);await ready(manager,'error')
+ expect(manager.resolve(request.trackId)).toBeNull()
+ // This test-created directory is empty; no recursive removal is needed.
+ rmdirSync(part)
+ manager.queue(request);await ready(manager,'saved')
 })

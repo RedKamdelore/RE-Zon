@@ -24,7 +24,18 @@ function requireAccount(id: string): ServiceAccount {
   if (!account) throw new Error('Аккаунт отключён')
   return account
 }
-const importing = new Map<string, Promise<AccountLibrary>>()
+const importing = new Map<string, { revision:number; promise:Promise<AccountLibrary> }>()
+const revisions = new Map<string,number>()
+const connecting = new Set<string>()
+function advance(id:string):number {
+  const revision=(revisions.get(id) ?? 0)+1
+  revisions.set(id,revision)
+  return revision
+}
+function assertCurrent(id:string,revision:number):void {
+  requireAccount(id)
+  if((revisions.get(id) ?? 0)!==revision) throw new Error('Подключение изменилось. Повторите обновление аккаунта.')
+}
 
 interface SpotifyTrack { id?:string; name?:string; artists?:Array<{name?:string}>; album?:{id?:string;artists?:Array<{name?:string}>;name?:string;images?:Array<{url:string}>}; duration_ms?:number }
 function spotifyTrack(t: SpotifyTrack): ImportedTrack {
@@ -50,7 +61,7 @@ async function spotifyPages(account: ServiceAccount, path: string): Promise<any[
   }
   return result
 }
-async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
+async function readLibrary(account: ServiceAccount, revision:number): Promise<AccountLibrary> {
   const result: AccountLibrary = {all:[],liked:[],albums:[],playlists:[],unavailable:{},updatedAt:Date.now()}
   if (account.service === 'vk') {
     result.all = await importVkBrowser(account.partition)
@@ -63,7 +74,7 @@ async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
     if (!clientId || !account.refreshToken) throw new Error('Spotify: переподключите аккаунт с Client ID')
     const tokens = await spRefresh(clientId, account.refreshToken)
     account = {...account,token:tokens.accessToken,refreshToken:tokens.refreshToken}
-    if (!accounts()[account.id]) throw new Error('Аккаунт отключён')
+    assertCurrent(account.id,revision)
     saveAccount({...requireAccount(account.id),token:account.token,refreshToken:account.refreshToken})
     // Разделы сохраняются независимо: запрет одного endpoint не скрывает остальные.
     try { result.liked = (await spotifyPages(account,'/v1/me/tracks?limit=50')).map(i=>spotifyTrack(i.item ?? i.track ?? {})).filter(t=>t.title) }
@@ -95,7 +106,7 @@ async function readLibrary(account: ServiceAccount): Promise<AccountLibrary> {
       if (!account.refreshToken || !errorMessage(e).includes('сессия истекла')) throw e
       const tokens = await yaRefresh(account.refreshToken)
       account = {...account,token:tokens.accessToken,refreshToken:tokens.refreshToken}
-      if (!accounts()[account.id]) throw new Error('Аккаунт отключён')
+      assertCurrent(account.id,revision)
       saveAccount({...requireAccount(account.id),token:account.token,refreshToken:account.refreshToken})
       likes = await yaLikes(account.token)
     }
@@ -142,11 +153,17 @@ export function registerAccountIpc(getWindow: () => BrowserWindow): void {
   ipcMain.handle('accounts:list', () => Object.values(accounts()).map(accountView))
   ipcMain.handle('accounts:connect', async (_event, service: ServiceId, label: string, reconnectId?: string) => {
     let freshPartition: string | undefined
+    let operationId: string | undefined
+    let operationRevision: number | undefined
     try {
       if (!ACCOUNT_SERVICES.includes(service)) throw new Error('Неизвестный сервис')
       const old = reconnectId ? requireAccount(reconnectId) : undefined
       if (old && old.service !== service) throw new Error('Аккаунт другого сервиса')
       const id = old?.id ?? `${service}:${randomUUID()}`
+      if(connecting.has(id)) throw new Error('Вход в этот аккаунт уже выполняется')
+      operationId=id
+      operationRevision=advance(id)
+      connecting.add(id)
       const partition = old?.partition ?? `persist:rezon-${id.replaceAll(':','-')}`
       if (!old) freshPartition=partition
       const data = loadData()
@@ -181,14 +198,16 @@ export function registerAccountIpc(getWindow: () => BrowserWindow): void {
         const auth=await lfmGetSession(data.lastfmApiKey,data.lastfmApiSecret,token,data.lastfmProxy)
         connection={token:auth.key,userId:auth.username}
       }
-      const account:ServiceAccount={...old,...connection,id,service,partition,connectedAt:Date.now(),autoRefresh:old?.autoRefresh ?? true,
-        label:label?.trim() || connection.userId || `${SERVICE_NAMES[service]} ${Object.values(accounts()).filter(a=>a.service===service).length+1}`}
+      if(old) assertCurrent(id,operationRevision)
+      const current=old ? requireAccount(id) : undefined
+      const account:ServiceAccount={...current,...connection,id,service,partition,connectedAt:Date.now(),autoRefresh:current?.autoRefresh ?? true,
+        label:(current && current.label!==old?.label ? current.label : label?.trim()) || connection.userId || `${SERVICE_NAMES[service]} ${Object.values(accounts()).filter(a=>a.service===service).length+1}`}
       saveAccount(account)
       return {ok:true,account:accountView(account)}
     } catch(e) {
       if(freshPartition) await session.fromPartition(freshPartition).clearStorageData().catch(()=>{})
       return {ok:false,error:errorMessage(e)}
-    }
+    } finally {if(operationId)connecting.delete(operationId)}
   })
   ipcMain.handle('accounts:update', (_event,id:string,patch:{label?:string;autoRefresh?:boolean})=>{
     const account=requireAccount(id)
@@ -201,15 +220,31 @@ export function registerAccountIpc(getWindow: () => BrowserWindow): void {
     const connections={...data.connections}
     if(id===`${account.service}:default`) delete connections[account.service]
     saveData({...data,connections,serviceAccounts:remaining})
+    advance(id)
     await session.fromPartition(account.partition).clearStorageData()
     return true
   })
   ipcMain.handle('accounts:import', async (_event,id:string)=>{
     try {
       const account=requireAccount(id)
-      if(!importing.has(id)) importing.set(id,readLibrary(account).finally(()=>importing.delete(id)))
-      const library=await importing.get(id)!
-      requireAccount(id) // аккаунт мог быть отключён во время запроса
+      if(connecting.has(id)) throw new Error('Дождитесь завершения входа в аккаунт')
+      const revision=revisions.get(id) ?? 0
+      let job=importing.get(id)
+      if(!job || job.revision!==revision){
+        const previous=job
+        const promise=(async()=>{
+          // Let the old browser import finish before reusing its cookie partition.
+          if(previous)await previous.promise.catch(()=>{})
+          assertCurrent(id,revision)
+          return readLibrary(requireAccount(id),revision)
+        })()
+        job={revision,promise}
+        importing.set(id,job)
+        const currentJob=job
+        void promise.finally(()=>{if(importing.get(id)===currentJob)importing.delete(id)}).catch(()=>{})
+      }
+      const library=await job.promise
+      assertCurrent(id,revision)
       const data=loadData()
       const previous=data.accountLibraries?.[id]
       if(previous) {

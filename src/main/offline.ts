@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { createHash } from 'node:crypto'
 import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -105,23 +107,25 @@ export class OfflineDownloads {
       if (Number.isFinite(length) && length > MAX_BYTES) throw new Error('Файл больше 300 МБ.')
       if (this.maxCacheBytes && Number.isFinite(length) && length > 0 && this.savedBytes() + length > this.maxCacheBytes) throw new Error('Достигнут лимит офлайн-копий. Увеличьте его в настройках загрузок.')
       state.total = Number.isFinite(length) && length > 0 ? length : undefined
-      const writer = createWriteStream(part,{flags:'w'})
       const hash = createHash('sha256')
       let header = new Uint8Array()
-      try {
-        for await (const chunk of response.body) {
+      const manager=this
+      async function* chunks() {
+        for await (const chunk of response!.body!) {
           if (controller.signal.aborted) throw new Error('Загрузка отменена.')
           const data = Buffer.from(chunk)
           state.bytes += data.length
           if (state.bytes > MAX_BYTES) throw new Error('Файл больше 300 МБ.')
-          if (this.maxCacheBytes && this.savedBytes() + state.bytes > this.maxCacheBytes) throw new Error('Достигнут лимит офлайн-копий. Увеличьте его в настройках загрузок.')
+          if (manager.maxCacheBytes && manager.savedBytes() + state.bytes > manager.maxCacheBytes) throw new Error('Достигнут лимит офлайн-копий. Увеличьте его в настройках загрузок.')
           if (header.length < 16) header = Buffer.concat([header,data]).subarray(0,16)
           hash.update(data)
-          if (!writer.write(data)) await new Promise<void>((resolve,reject) => { writer.once('drain',resolve);writer.once('error',reject) })
-          this.publish(this.list())
+          yield data
+          manager.publish(manager.list())
         }
-        await new Promise<void>((resolve,reject) => { writer.once('error',reject); writer.end(() => resolve()) })
-      } catch (error) { writer.destroy(); throw error }
+      }
+      // pipeline installs error handlers before opening the file and destroys
+      // both streams on disk failure, source failure or cancellation.
+      await pipeline(Readable.from(chunks()),createWriteStream(part,{flags:'w'}),{signal:controller.signal})
       if (controller.signal.aborted) throw new Error('Загрузка отменена.')
       if (!state.bytes || (state.total && state.bytes !== state.total) || !audioHeader(header,extension)) throw new Error('Файл загружен не полностью или имеет неверный формат.')
       renameSync(part,target)

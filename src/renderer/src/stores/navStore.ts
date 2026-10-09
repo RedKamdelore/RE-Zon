@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { animateViewChange } from '../motion'
 
 export type View =
   | { name: 'home' }
@@ -26,10 +27,10 @@ interface NavState {
  * Навигация вынесена в стор, чтобы контекстное меню трека (и любой глубоко
  * вложенный компонент) могло переключать view без prop-drilling через App.
  */
-export const useNavStore = create<NavState>()((set) => ({
+export const useNavStore = create<NavState>()((set, get) => ({
   view: { name: 'home' },
   past: [], future: [],
-  setView: (view) => set(s => JSON.stringify(s.view) === JSON.stringify(view) ? {} : { view, past: [...s.past, s.view].slice(-60), future: [] }),
-  back: () => set(s => s.past.length ? { view: s.past[s.past.length - 1], past: s.past.slice(0, -1), future: [s.view, ...s.future] } : {}),
-  forward: () => set(s => s.future.length ? { view: s.future[0], past: [...s.past, s.view], future: s.future.slice(1) } : {}),
+  setView: (view) => { if (JSON.stringify(get().view) === JSON.stringify(view)) return; animateViewChange(() => set(s => ({ view, past: [...s.past, s.view].slice(-60), future: [] })), 'route') },
+  back: () => { if (!get().past.length) return; animateViewChange(() => set(s => ({ view: s.past[s.past.length - 1], past: s.past.slice(0, -1), future: [s.view, ...s.future] })), 'route') },
+  forward: () => { if (!get().future.length) return; animateViewChange(() => set(s => ({ view: s.future[0], past: [...s.past, s.view], future: s.future.slice(1) })), 'route') },
 }))

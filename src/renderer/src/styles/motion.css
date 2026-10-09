@@ -1,0 +1,38 @@
+/* The shell stays anchored while the content changes. */
+.main{view-transition-name:rezon-main}
+.settings-content{view-transition-name:rezon-settings}
+.full-player-content{view-transition-name:rezon-player}
+.full-player-refracted{position:absolute;z-index:-1;inset:0;overflow:hidden;pointer-events:none;opacity:.25;mix-blend-mode:screen;mask-image:radial-gradient(ellipse 53% 78% at 23% 46%,#000 5%,transparent 82%)}
+.full-player-mode-lyrics .full-player-refracted{opacity:.16}
+.full-player-refracted .theme-prism-canvas{position:absolute;inset:0;width:100%;height:100%}
+
+::view-transition-old(root),::view-transition-new(root){animation:none}
+html[data-motion-kind="route"]::view-transition-old(rezon-main){animation:rezon-route-out 170ms cubic-bezier(.4,0,1,1) both}
+html[data-motion-kind="route"]::view-transition-new(rezon-main){animation:rezon-route-in 320ms cubic-bezier(.16,.82,.2,1) both}
+html[data-motion-kind="route"]::view-transition-old(rezon-settings),html[data-motion-kind="route"]::view-transition-new(rezon-settings),html[data-motion-kind="route"]::view-transition-old(rezon-player),html[data-motion-kind="route"]::view-transition-new(rezon-player){animation:none}
+html[data-motion-kind="settings"]::view-transition-old(rezon-main),html[data-motion-kind="player"]::view-transition-old(rezon-main){animation:none;opacity:0}
+html[data-motion-kind="settings"]::view-transition-new(rezon-main),html[data-motion-kind="player"]::view-transition-new(rezon-main){animation:none;opacity:1}
+html[data-motion-kind="settings"]::view-transition-old(rezon-settings){animation:rezon-panel-out 150ms cubic-bezier(.4,0,1,1) both}
+html[data-motion-kind="settings"]::view-transition-new(rezon-settings){animation:rezon-panel-in 280ms cubic-bezier(.16,.82,.2,1) both}
+html[data-motion-kind="player"]::view-transition-old(rezon-player){animation:rezon-panel-out 140ms cubic-bezier(.4,0,1,1) both}
+html[data-motion-kind="player"]::view-transition-new(rezon-player){animation:rezon-panel-in 270ms cubic-bezier(.16,.82,.2,1) both}
+@keyframes rezon-route-out{to{opacity:.36;transform:translateX(-14px) scale(.985);filter:blur(3px)}}
+@keyframes rezon-route-in{from{opacity:.25;transform:translateX(18px) scale(.985);filter:blur(3px)}to{opacity:1;transform:none;filter:none}}
+@keyframes rezon-panel-out{to{opacity:.34;transform:translateY(-7px) scale(.99)}}
+@keyframes rezon-panel-in{from{opacity:.25;transform:translateY(11px) scale(.99)}to{opacity:1;transform:none}}
+
+/* The selected player mode travels, instead of being replaced by another pill. */
+.full-player-modes{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));isolation:isolate}
+.full-player-modes:before{content:'';position:absolute;z-index:0;left:3px;top:3px;bottom:3px;width:calc((100% - 6px)/4);border:1px solid color-mix(in srgb,var(--accent) 31%,transparent);border-radius:6px;background:color-mix(in srgb,var(--accent) 16%,var(--bg-panel));box-shadow:inset 0 1px #fff2,0 3px 9px #0003;transform:translateX(calc(var(--mode-index,0)*100%));transition:transform 330ms cubic-bezier(.18,.8,.18,1)}
+.full-player-modes button{position:relative;z-index:1;min-width:0;padding-inline:10px}
+.full-player-modes button.active{background:transparent;box-shadow:none;color:var(--text-primary)}
+.full-player-side-track{animation:rezon-side-arrive 340ms cubic-bezier(.18,.8,.18,1) both}
+@keyframes rezon-side-arrive{from{opacity:.45;transform:translateX(-12px)}to{opacity:1;transform:none}}
+.full-player-content .full-player-queue,.full-player-content .full-player-eq,.full-player-content .full-player-lyrics-body{animation:rezon-content-arrive 330ms cubic-bezier(.18,.8,.18,1) both}
+@keyframes rezon-content-arrive{from{opacity:.45;transform:translateX(10px)}to{opacity:1;transform:none}}
+
+@media(prefers-reduced-motion:reduce){
+  ::view-transition-old(*),::view-transition-new(*){animation-duration:1ms!important}
+  .full-player-modes:before{transition:none}
+  .full-player-side-track,.full-player-content .full-player-queue,.full-player-content .full-player-eq,.full-player-content .full-player-lyrics-body{animation:none}
+}

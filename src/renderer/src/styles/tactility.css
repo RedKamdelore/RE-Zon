@@ -1,0 +1,177 @@
+/* A quiet material layer for the desktop UI. The grain is static and shared. */
+:root {
+  --tactile-ease: cubic-bezier(.2,.72,.22,1);
+  --tactile-shadow: 0 12px 32px #0002;
+  --tactile-edge: inset 0 1px rgba(255,255,255,.09);
+}
+
+.nav-rail,
+.command-bar {
+  background: linear-gradient(160deg,color-mix(in srgb,var(--bg-app) 94%,white),var(--bg-app));
+  box-shadow: var(--tactile-edge);
+}
+.command-bar { backdrop-filter: blur(12px); }
+.main>section:not(.full-player),
+.main>.settings-workspace { animation: tactile-view-enter 230ms var(--tactile-ease) both; }
+@keyframes tactile-view-enter {
+  from { opacity: .82;transform: translateY(7px); }
+  to { opacity: 1;transform: none; }
+}
+
+.material-surface,
+.route-card,
+.source-banner,
+.local-source,
+.pl-header,
+.full-player-queue .rp-row,
+.full-player-eq .eq-tone,
+.full-player-eq .eq-crossfade {
+  background-image: linear-gradient(145deg,rgba(255,255,255,.045),transparent 42%),url('../assets/grain.svg');
+  background-size: auto,128px 128px;
+  background-blend-mode: normal,soft-light;
+  box-shadow: var(--tactile-edge),var(--tactile-shadow);
+}
+.material-surface { border: 1px solid color-mix(in srgb,var(--border-subtle) 85%,white 15%); }
+.route-card { background-color: color-mix(in srgb,var(--bg-panel) 70%,transparent); }
+.route-card:hover { background-color: var(--bg-panel); }
+.source-banner { border: 1px solid color-mix(in srgb,var(--accent) 15%,var(--border-subtle)); }
+.local-source,.pl-header { background-color: color-mix(in srgb,var(--bg-panel) 62%,transparent); }
+.service-facts li { background: color-mix(in srgb,var(--bg-tile) 34%,transparent);box-shadow: inset 0 1px rgba(255,255,255,.04); }
+.source-mini { border-radius: 8px;transition: background-color 170ms ease,box-shadow 170ms ease; }
+.source-mini:hover { background: var(--hover-overlay);box-shadow: inset 2px 0 var(--accent); }
+.full-player::before {
+  background-image: linear-gradient(130deg,color-mix(in srgb,var(--bg-panel) 55%,transparent),color-mix(in srgb,var(--bg-app) 84%,transparent)),url('../assets/grain.svg');
+  background-size: auto,128px 128px;
+  background-blend-mode: normal,soft-light;
+}
+.full-player-effect-orbit::before {
+  background-image: linear-gradient(130deg,color-mix(in srgb,var(--bg-panel) 48%,transparent),color-mix(in srgb,var(--bg-app) 72%,transparent)),url('../assets/grain.svg');
+}
+.full-player-effect-prism::before {
+  background-image: linear-gradient(130deg,color-mix(in srgb,var(--bg-panel) 35%,transparent),color-mix(in srgb,var(--bg-app) 63%,transparent)),url('../assets/grain.svg');
+}
+.full-player-header,
+.full-player-transport {
+  box-shadow: inset 0 1px rgba(255,255,255,.055);
+}
+.full-player-transport { backdrop-filter: blur(18px) saturate(1.15); }
+.full-player-modes { box-shadow: inset 0 2px 5px #0002,var(--tactile-edge); }
+.full-player-modes button.active { box-shadow: var(--tactile-edge),0 2px 7px #0003,inset 0 0 0 1px color-mix(in srgb,var(--accent) 25%,transparent); }
+.full-player-lyrics-body .rp-lyrics-line:not(.active) { opacity: .52; }
+.full-player-lyrics-body .rp-lyrics-line.passed { opacity: .34; }
+.full-player-lyrics-body .rp-lyrics-line:not(.active):hover { opacity: .82; }
+.rp-lyrics-options>button,
+.rp-lyrics-sync>button { box-shadow: inset 0 1px rgba(255,255,255,.075);transition: background-color 170ms ease,border-color 170ms ease,transform 170ms var(--tactile-ease); }
+.rp-lyrics-options>button:hover,
+.rp-lyrics-sync>button:hover:not(:disabled) { background-color: color-mix(in srgb,var(--accent) 9%,var(--bg-panel));border-color: color-mix(in srgb,var(--accent) 45%,var(--border-subtle)); }
+.rp-lyrics-options>button:active,
+.rp-lyrics-sync>button:active:not(:disabled) { transform: translateY(1px); }
+.full-player-art,
+.full-player-side-cover { position: relative; }
+.full-player-art::after,
+.full-player-side-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(145deg,rgba(255,255,255,.14),transparent 36%,rgba(0,0,0,.13));
+  box-shadow: inset 0 1px rgba(255,255,255,.18),inset 0 -1px rgba(0,0,0,.2);
+  pointer-events: none;
+}
+
+.global-search,
+.collection-search,
+.search-palette {
+  box-shadow: inset 0 1px rgba(255,255,255,.055);
+}
+.global-search:hover,
+.collection-search:hover { border-color: color-mix(in srgb,var(--accent) 32%,var(--border-subtle)); }
+.ctx-menu,
+.command-menu,
+.rp-lyrics-menu,
+.search-palette {
+  background-color: color-mix(in srgb,var(--bg-popup) 94%,transparent);
+  background-image: linear-gradient(155deg,rgba(255,255,255,.065),transparent 45%),url('../assets/grain.svg');
+  background-blend-mode: normal,soft-light;
+  border-color: color-mix(in srgb,var(--border-subtle) 80%,white 20%);
+  box-shadow: var(--tactile-edge),0 18px 48px #0006;
+  backdrop-filter: blur(18px) saturate(1.15);
+  animation: tactile-pop-in 150ms var(--tactile-ease) both;
+}
+@keyframes tactile-pop-in {
+  from { opacity: .7;transform: translateY(4px) scale(.985); }
+  to { opacity: 1;transform: none; }
+}
+.skin-card {
+  background-image: linear-gradient(145deg,rgba(255,255,255,.04),transparent 60%),url('../assets/grain.svg');
+  background-blend-mode: normal,soft-light;
+  box-shadow: var(--tactile-edge),0 5px 14px #0002;
+  transition: transform 170ms var(--tactile-ease),border-color 170ms ease,box-shadow 170ms var(--tactile-ease);
+}
+.skin-card.active { background-color: color-mix(in srgb,var(--accent) 7%,var(--bg-panel));box-shadow: var(--tactile-edge),0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent),0 9px 25px #0003; }
+.settings-navigation button { transition: background-color 170ms ease,color 170ms ease,transform 170ms var(--tactile-ease); }
+.settings-navigation button.active { box-shadow: inset 0 1px rgba(255,255,255,.08),inset 3px 0 var(--accent); }
+.tl-row,.catalog-row { transition: background-color 150ms ease,box-shadow 150ms ease; }
+.tl-row:hover,.catalog-row:hover { box-shadow: inset 2px 0 var(--accent); }
+
+.rail-item,
+.route-card,
+.album-card,
+.btn-primary,
+.btn-outline,
+.play-btn,
+.icon-btn,
+.full-player-modes button,
+.full-player-back {
+  transition: transform 170ms var(--tactile-ease),box-shadow 170ms var(--tactile-ease),background-color 170ms ease,border-color 170ms ease,color 170ms ease;
+}
+.btn-primary,
+.play-btn { box-shadow: inset 0 1px rgba(255,255,255,.2),0 3px 10px color-mix(in srgb,var(--accent) 20%,transparent); }
+
+@media (hover:hover) {
+  .route-card:hover { transform: translateY(-2px);box-shadow: var(--tactile-edge),0 14px 30px #0004; }
+  .album-card:hover { transform: translateY(-2px); }
+  .skin-card:hover { transform: translateY(-2px);box-shadow: var(--tactile-edge),0 11px 24px #0004; }
+  .skin-card.active:hover { box-shadow: var(--tactile-edge),0 0 0 1px var(--accent),0 11px 24px #0004; }
+  .btn-primary:hover:not(:disabled),
+  .play-btn:hover:not(:disabled) { transform: translateY(-2px);box-shadow: inset 0 1px rgba(255,255,255,.25),0 8px 20px color-mix(in srgb,var(--accent) 28%,transparent); }
+  .rail-item:hover,
+  .icon-btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .settings-navigation button:hover:not(.active) { transform: translateX(2px);background: var(--hover-overlay); }
+}
+.route-card:active,
+.btn-primary:active:not(:disabled),
+.btn-outline:active:not(:disabled),
+.play-btn:active:not(:disabled),
+.rail-item:active,
+.icon-btn:active:not(:disabled),
+.full-player-modes button:active {
+  transform: translateY(1px) scale(.98);
+  box-shadow: inset 0 2px 7px #0003;
+}
+.skin-card:active,.settings-navigation button:active { transform: translateY(1px) scale(.99); }
+.pb-heart.active svg { animation: tactile-favorite 340ms var(--tactile-ease); }
+@keyframes tactile-favorite {
+  0% { transform: scale(.8); }
+  55% { transform: scale(1.24); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .main>section:not(.full-player),.main>.settings-workspace,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { animation: none; }
+  .route-card:hover,.album-card:hover,.btn-primary:hover,.play-btn:hover,.rail-item:hover,.icon-btn:hover,
+  .skin-card:hover,.settings-navigation button:hover,
+  .route-card:active,.btn-primary:active,.btn-outline:active,.play-btn:active,.rail-item:active,.icon-btn:active,.full-player-modes button:active,.skin-card:active,.settings-navigation button:active,.rp-lyrics-options>button:active,.rp-lyrics-sync>button:active { transform: none; }
+  .pb-heart.active svg { animation: none; }
+}
+@media (forced-colors:active) {
+  .material-surface,.route-card,.source-banner,.local-source,.pl-header,.full-player::before,.full-player-queue .rp-row,.full-player-eq .eq-tone,.full-player-eq .eq-crossfade,.skin-card,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { background-image: none;box-shadow: none; }
+  .full-player-art::after,.full-player-side-cover::after { display: none; }
+  .command-bar,.full-player-transport,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { backdrop-filter: none; }
+}
+@media (prefers-contrast:more) {
+  .material-surface,.route-card,.source-banner,.local-source,.pl-header,.full-player::before,.full-player-queue .rp-row,.full-player-eq .eq-tone,.full-player-eq .eq-crossfade,.skin-card,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { background-image: none; }
+  .command-bar,.full-player-transport,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { backdrop-filter: none; }
+  .full-player-ambient,.full-player-ambient-secondary,.full-player-pulse { opacity: .06;animation: none; }
+  .full-player-lyrics-body .rp-lyrics-line:not(.active) { opacity: .75; }
+}

@@ -6,6 +6,9 @@ import './styles/shell.css'
 import './styles/components.css'
 import './styles/pages.css'
 import './styles/fullPlayer.css'
+import './styles/tactility.css'
+import './styles/themeStudio.css'
+import './styles/motion.css'
 import { applyTheme, DEFAULT_APPEARANCE } from './theme'
 
 applyTheme(DEFAULT_APPEARANCE.theme)

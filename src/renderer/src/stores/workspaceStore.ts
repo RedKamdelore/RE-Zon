@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { animateViewChange } from '../motion'
 export type FullPlayerMode = 'cover' | 'lyrics' | 'queue' | 'eq'
 export type PlayerEffect = 'still' | 'calm' | 'orbit' | 'prism'
 export type CollectionPreferences = { query: string; source: string; sort: string; layout: 'grid' | 'list'; density: 'comfortable' | 'compact' }
@@ -23,15 +24,15 @@ export const useWorkspaceStore = create<{
   openFullPlayer: (mode?: FullPlayerMode) => void; closeFullPlayer: () => void; setFullPlayerMode: (mode: FullPlayerMode) => void
   setPlayerEffect: (effect: PlayerEffect) => void
   setCollection: (section: string, patch: Partial<CollectionPreferences>) => void
-}>()((set) => ({
+}>()((set, get) => ({
   searchOpen: false, collections: readCollections(), lyricDrafts: {},
   fullPlayerOpen: false, fullPlayerMode: (() => { try { const saved = localStorage.getItem('rezon-full-player-mode'); return saved === 'lyrics' || saved === 'queue' || saved === 'eq' ? saved : 'cover' } catch { return 'cover' } })(),
   playerEffect: (() => { try { const saved = localStorage.getItem('rezon-player-effect'); return saved === 'still' || saved === 'orbit' || saved === 'prism' ? saved : 'calm' } catch { return 'calm' } })(),
   setLyricDraft: (id,value)=>set(s=>{const lyricDrafts={...s.lyricDrafts};if(value===undefined)delete lyricDrafts[id];else lyricDrafts[id]=value;return{lyricDrafts}}),
   setSearchOpen: searchOpen => set({ searchOpen }),
-  openFullPlayer: mode => set(s => ({ fullPlayerOpen: true, fullPlayerMode: mode ?? s.fullPlayerMode })),
-  closeFullPlayer: () => set({ fullPlayerOpen: false }),
-  setFullPlayerMode: fullPlayerMode => set(() => { try { localStorage.setItem('rezon-full-player-mode', fullPlayerMode) } catch {} return { fullPlayerMode } }),
+  openFullPlayer: mode => { if (get().fullPlayerOpen && (!mode || mode === get().fullPlayerMode)) return; animateViewChange(() => set(s => ({ fullPlayerOpen: true, fullPlayerMode: mode ?? s.fullPlayerMode })), 'route') },
+  closeFullPlayer: () => { if (!get().fullPlayerOpen) return; animateViewChange(() => set({ fullPlayerOpen: false }), 'route') },
+  setFullPlayerMode: fullPlayerMode => { if (get().fullPlayerMode === fullPlayerMode) return; animateViewChange(() => set(() => { try { localStorage.setItem('rezon-full-player-mode', fullPlayerMode) } catch {} return { fullPlayerMode } }), 'player') },
   setPlayerEffect: playerEffect => set(() => { try { localStorage.setItem('rezon-player-effect', playerEffect) } catch {} return { playerEffect } }),
   setCollection: (section, patch) => set(s => { const collections={ ...s.collections, [section]: { ...collectionDefaults, ...s.collections[section], ...patch } }; try { localStorage.setItem('rezon-collection-preferences',JSON.stringify(collections)) } catch {} return {collections} }),
 }))

@@ -27,13 +27,14 @@ export type Panel = 'queue' | 'lyrics' | 'eq' | 'mini'
 interface PlayerBarProps {
   onTogglePanel: (panel: Panel) => void
   onExpand?: () => void
+  hideModeShortcuts?: boolean
 }
 
 /** Процент заполнения слайдера → CSS-переменная для градиента трека */
 const progressStyle = (value: number, max: number): CSSProperties =>
   ({ '--progress': `${max > 0 ? Math.min(100, (value / max) * 100) : 0}%` }) as CSSProperties
 
-export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
+export default function PlayerBar({ onTogglePanel, onExpand, hideModeShortcuts = false }: PlayerBarProps) {
   const queue = usePlayerStore((s) => s.queue)
   const order = usePlayerStore((s) => s.order)
   const pos = usePlayerStore((s) => s.pos)
@@ -165,7 +166,7 @@ export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
       </div>
 
       <div className="pb-right">
-        <button className="icon-btn" title="Очередь" onClick={() => onTogglePanel('queue')}>
+        {!hideModeShortcuts && <><button className="icon-btn" title="Очередь" onClick={() => onTogglePanel('queue')}>
           <QueueIcon size={18} />
         </button>
         <button className="icon-btn" title="Текст песни" onClick={() => onTogglePanel('lyrics')}>
@@ -173,7 +174,7 @@ export default function PlayerBar({ onTogglePanel, onExpand }: PlayerBarProps) {
         </button>
         <button className="icon-btn" title="Эквалайзер" onClick={() => onTogglePanel('eq')}>
           <EqIcon size={18} />
-        </button>
+        </button></>}
         <button className="icon-btn" title="Мини-плеер" onClick={() => onTogglePanel('mini')}>
           <MiniIcon size={18} />
         </button>
