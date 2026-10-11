@@ -8,6 +8,7 @@ import { useLibraryStore } from '../stores/libraryStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { useNavStore } from '../stores/navStore'
 import { fmt } from '../utils/format'
+import { canSaveOffline } from '@shared/offline'
 import { PlayIcon, ClockIcon, MusicNoteIcon, HeartIcon, SOURCE_BADGES } from './icons'
 
 interface TrackListProps {
@@ -124,7 +125,7 @@ export function ContextMenu({
         >
           {isFav ? '♥ Убрать из любимого' : '♡ В любимое'}
         </button>
-        {t.sourceId === 'direct' && <button className="ctx-item" onClick={() => {
+        {canSaveOffline(t) && <button className="ctx-item" onClick={() => {
           setOfflineError('')
           onSaveToLibrary?.()
           void window.api.offlineQueue(t).then(() => { useNavStore.getState().setView({name:'settings',page:'downloads'}); onClose() }).catch(error => setOfflineError(error instanceof Error ? error.message : 'Не удалось начать загрузку.'))

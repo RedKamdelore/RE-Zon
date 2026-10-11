@@ -18,8 +18,10 @@ export type Fetcher = (url: string) => Promise<FetcherResponse>
 
 const API_BASE = 'https://api.vk.com/method'
 const API_VERSION = '5.131'
-/** Макс. count за один запрос audio.get */
-const PAGE_SIZE = 6000
+/** Запрашиваемый размер страницы audio.get */
+const PAGE_SIZE = 200
+const RETRY_PAGE_SIZE = 100
+const MAX_PAGES = 1000
 /** VK разрешает ~3 запроса/сек — пауза между страницами */
 const PAGE_DELAY_MS = 350
 
@@ -63,11 +65,14 @@ function vkErrorMessage(code: number, msg: string): string {
 export type Sleep = (ms: number) => Promise<void>
 
 const defaultSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const audioKey = (item: VkAudioItem): string => item.owner_id !== undefined && item.id !== undefined
+  ? `${item.owner_id}_${item.id}` : JSON.stringify(item)
+const pageFingerprint = (items: VkAudioItem[]): string => items.map(audioKey).sort().join('\u0000')
 
-async function fetchPage(fetcher: Fetcher, token: string, offset: number): Promise<VkAudioGetResponse> {
+async function fetchPage(fetcher: Fetcher, token: string, offset: number, count = PAGE_SIZE): Promise<VkAudioGetResponse> {
   const url =
     `${API_BASE}/audio.get?access_token=${encodeURIComponent(token)}&v=${API_VERSION}` +
-    `&count=${PAGE_SIZE}&offset=${offset}`
+    `&count=${count}&offset=${offset}`
   const res = await fetcher(url)
   if (!res.ok) throw new Error(`VK: HTTP ${res.status}`)
   const data = (await res.json()) as VkAudioGetResponse
@@ -90,33 +95,47 @@ export async function vkAudioGetWith(
 ): Promise<ImportedTrack[]> {
   const collected: VkAudioItem[] = []
   const seen = new Set<string>()
+  const pages = new Set<string>()
   let offset = 0
   let total = Infinity
-  while (collected.length < total) {
-    if (collected.length > 0) await sleep(PAGE_DELAY_MS)
+  let requests = 0
+  while (offset < total) {
+    if (requests >= MAX_PAGES) throw new Error(`VK: импорт остановлен после ${requests} страниц на позиции ${offset}. Сохранённая библиотека не изменена.`)
+    if (requests++ > 0) await sleep(PAGE_DELAY_MS)
     const data = await fetchPage(fetcher, token, offset)
-    const items = data.response?.items
+    let items = data.response?.items
     if (!Array.isArray(items)) throw new Error('VK: некорректный ответ audio.get')
     if (items.length === 0) {
       if (Number.isFinite(total) && offset < total) {
-        throw new Error(`VK: получено только ${offset} из ${total} записей. Повторите импорт — текущий плейлист сохранён.`)
+        throw new Error(`VK: получено только ${offset} из ${total} записей. Сохранённая библиотека не изменена.`)
       }
       break
     }
     total = typeof data.response?.count === 'number' ? data.response.count : Infinity
+    let signature = pageFingerprint(items)
+    if (pages.has(signature)) {
+      // A page with no new IDs can contain genuine duplicates. A full repeated
+      // page is different: retry the same offset with a smaller request before
+      // deciding that VK is ignoring pagination.
+      await sleep(PAGE_DELAY_MS)
+      const retry = await fetchPage(fetcher, token, offset, RETRY_PAGE_SIZE)
+      items = retry.response?.items
+      if (!Array.isArray(items)) throw new Error('VK: некорректный ответ audio.get')
+      signature = pageFingerprint(items)
+      if (!items.length || pages.has(signature) || items.every((item) => seen.has(audioKey(item)))) {
+        throw new Error(`VK: API повторяет страницу аудио на позиции ${offset} из ${total}. Полный список не получен; сохранённая библиотека не изменена.`)
+      }
+      if (typeof retry.response?.count === 'number') total = retry.response.count
+    }
+    pages.add(signature)
     offset += items.length
-    let fresh = 0
     for (const item of items) {
-      const key = item.owner_id !== undefined && item.id !== undefined ? `${item.owner_id}_${item.id}` : JSON.stringify(item)
+      const key = audioKey(item)
       if (seen.has(key)) continue
       seen.add(key)
       collected.push(item)
-      fresh++
     }
-    if (!fresh) throw new Error('VK: API повторяет страницу аудио. Полный список не получен, текущий плейлист сохранён.')
     if (offset >= total) break
-    // Если VK отдал меньше, чем осталось, — дальше страниц нет
-    if (items.length < PAGE_SIZE && collected.length >= total) break
   }
   return collected.map((it) => ({
     title: it.title ?? '',

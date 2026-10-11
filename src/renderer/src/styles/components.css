@@ -75,16 +75,25 @@
 .pb-track-info{min-width:0;max-width:100%}
 .pb-title{font-size:18px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pb-artist{font-size:12px;color:var(--text-secondary);display:flex;justify-content:center;align-items:center;gap:7px;margin-top:5px}
+.pb-artist-name,.mp-artist-name{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pb-heart{position:absolute;right:0;top:0}
 .pb-center{display:flex;flex-direction:column;gap:12px}
 .pb-controls{display:flex;align-items:center;justify-content:center;gap:15px;order:2}
 .play-btn{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;background:var(--accent);color:var(--on-accent);border:0;border-radius:13px;padding:0}
 .pb-seek{display:flex;align-items:center;gap:8px}
 .pb-seek .slider{flex:1;min-width:0}
+.pb-seek .slider.has-download-progress,.mp-progress .slider.has-download-progress{background:linear-gradient(to right,var(--accent) var(--progress,0%),transparent var(--progress,0%)),linear-gradient(to right,color-mix(in srgb,var(--accent) 38%,var(--slider-track)) var(--download-progress,0%),var(--slider-track) var(--download-progress,0%))}
+.pb-seek .slider.download-unknown,.mp-progress .slider.download-unknown{box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 40%,transparent)}
 .pb-seek>span{font-size:10px;min-width:28px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
 .pb-stop-control{display:none}
 .pb-seek .pb-stop-inline{width:28px;height:28px}
 .pb-error{margin:0;color:var(--danger);font-size:11px;line-height:1.35;text-align:center}
+.offline-indicator{display:inline-flex;align-items:center;gap:2px;flex-shrink:0;color:var(--text-secondary);vertical-align:middle}
+.offline-indicator.is-saved{color:var(--accent)}
+.offline-indicator.is-downloading{color:var(--accent)}
+.offline-indicator.is-error{color:var(--danger)}
+.offline-indicator.is-unavailable{opacity:.55}
+.offline-indicator small{font-size:9px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1}
 .repeat-wrap{position:relative;display:flex}
 .repeat-badge{position:absolute;font-size:8px;bottom:0;right:0;color:var(--accent)}
 .pb-right{display:flex;align-items:center;justify-content:center;gap:8px}
@@ -169,12 +178,12 @@
 .mp-info{width:100%;min-width:0;text-align:center;line-height:1.35}
 .mp-title,.mp-artist{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mp-title{font-size:15px;font-weight:650}
-.mp-artist{font-size:12px;color:var(--text-secondary)}
+.mp-artist{font-size:12px;color:var(--text-secondary);display:flex;align-items:center;justify-content:center;gap:5px}
 .mp-controls{display:flex;gap:16px;align-items:center;justify-content:center}
 .mp-play{width:44px;height:44px}
 .mini-player>.icon-btn{position:absolute;right:12px;top:10px}
 .mp-progress{width:100%;display:flex;align-items:center;gap:9px;font-size:11px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
-.mp-progress input{flex:1;min-width:0;accent-color:var(--accent)}
+.mp-progress input{flex:1;min-width:0}
 .mp-error{width:100%;margin:0;color:var(--danger);font-size:10px;line-height:1.3;text-align:center;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .mp-cover>.tl-cover{width:100%;height:100%}
 .downloads-settings .heading-actions{margin:16px 0;gap:8px}.downloads-settings .heading-actions .btn-outline{min-height:36px}

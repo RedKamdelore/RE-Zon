@@ -25,6 +25,7 @@ export class OfflineDownloads {
   private active = new Map<string, AbortController>()
   private tasks = new Map<string, OfflineItem>()
   private tail: Promise<void> = Promise.resolve()
+  private lastProgressPublish = 0
   private indexPath: string
   private maxCacheBytes = 0
   constructor(private folder: string, private publish: (items: OfflineItem[]) => void, private fetcher: Fetcher = fetch) {
@@ -120,7 +121,10 @@ export class OfflineDownloads {
           if (header.length < 16) header = Buffer.concat([header,data]).subarray(0,16)
           hash.update(data)
           yield data
-          manager.publish(manager.list())
+          if (Date.now() - manager.lastProgressPublish >= 120) {
+            manager.lastProgressPublish = Date.now()
+            manager.publish(manager.list())
+          }
         }
       }
       // pipeline installs error handlers before opening the file and destroys

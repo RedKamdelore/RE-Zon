@@ -1,5 +1,6 @@
 export type OfflinePhase = 'queued' | 'downloading' | 'saved' | 'error' | 'cancelled'
 export interface OfflineItem { trackId: string; title: string; artist: string; phase: OfflinePhase; bytes: number; total?: number; error?: string }
+import type { Track } from './types'
 
 const AUDIO_EXT = new Set(['mp3', 'flac', 'wav', 'ogg', 'opus', 'm4a'])
 
@@ -17,4 +18,10 @@ export function directAudioUrl(raw: string): {url: string; extension: string} {
   const extension = url.pathname.split('/').pop()?.split('.').pop()?.toLowerCase() ?? ''
   if (!AUDIO_EXT.has(extension)) throw new Error('Поддерживаются прямые ссылки на MP3, FLAC, WAV, OGG, OPUS и M4A.')
   return {url:url.toString(),extension}
+}
+
+/** VK can be cached only when it supplies a direct audio file, not a stream manifest. */
+export function canSaveOffline(track: Pick<Track, 'sourceId' | 'filePath'>): boolean {
+  if (track.sourceId !== 'direct' && track.sourceId !== 'vk') return false
+  try { directAudioUrl(track.filePath); return true } catch { return false }
 }

@@ -2,7 +2,7 @@ import { ipcMain, dialog, app, shell, BrowserWindow } from 'electron'
 import { join, extname } from 'path'
 import { readFile } from 'fs/promises'
 import { loadData, saveData, profileRecoveryStatus } from './persistence'
-import { scanFolders, demoTracks } from './library'
+import { scanFolders } from './library'
 import { hasVkSessionCookie, matchVkWebAuthUrl, VK_PARTITION } from './vkWeb'
 import { session as electronSession } from 'electron'
 import { importVkBrowser, prepareVkSession } from './vkBrowser'
@@ -34,11 +34,6 @@ const COVER_MIME: Record<string, string> = {
   '.webp': 'image/webp',
 }
 
-// electron-builder.yml (Task 15) будет копировать resources/demo в resourcesPath
-const DEMO_DIR = app.isPackaged
-  ? join(process.resourcesPath, 'demo')
-  : join(__dirname, '../../resources/demo')
-
 export function registerIpc(getWindow: () => BrowserWindow): void {
   registerAccountIpc(getWindow)
   ipcMain.handle('lyrics:lookup', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyrics(request))
@@ -56,7 +51,6 @@ export function registerIpc(getWindow: () => BrowserWindow): void {
     return r.canceled ? null : r.filePaths[0]
   })
   ipcMain.handle('library:scan', (_e, folders: string[]) => scanFolders(folders))
-  ipcMain.handle('library:demo', () => demoTracks(DEMO_DIR))
   /**
    * VK-импорт через веб-сессию (V3-3b): куки из persist:vk прикладываются
    * electron-фетчером автоматически. При неудаче сохраняем дамп страницы

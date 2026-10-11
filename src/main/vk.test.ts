@@ -54,6 +54,48 @@ describe('vkAudioGetWith', () => {
     expect(tracks.filter((track) => track.streamUrl)).toHaveLength(2541)
     expect(offsets).toEqual(Array.from({ length: 13 }, (_, i) => i * 200))
   })
+  it('continues beyond 4600 records when a distinct page contains only already seen audio IDs', async () => {
+    const offsets: number[] = []
+    const fetcher: Fetcher = async (url) => {
+      const offset = Number(new URL(url).searchParams.get('offset'))
+      offsets.push(offset)
+      const ids = offset === 4600
+        ? [...Array.from({ length: 100 }, (_, i) => i), ...Array.from({ length: 100 }, (_, i) => 200 + i)]
+        : Array.from({ length: Math.min(200, 5001 - offset) }, (_, i) => offset === 4800 ? 4600 + i : offset + i)
+      return { ok: true, status: 200, json: async () => ({ response: {
+        count: 5001,
+        items: ids.map((id) => ({ id, owner_id: 1, artist: 'Artist', title: `Track ${id}` })),
+      } }) }
+    }
+    const tracks = await vkAudioGetWith(fetcher, 'T', async () => {})
+    expect(tracks).toHaveLength(4801)
+    expect(offsets).toEqual(Array.from({ length: 26 }, (_, i) => i * 200))
+    expect(new Set(tracks.map((track) => track.extId)).size).toBe(tracks.length)
+  })
+  it('retries an identical page with a smaller count and keeps pagination aligned', async () => {
+    const requests: Array<{ offset: number; count: number }> = []
+    const fetcher: Fetcher = async (url) => {
+      const params = new URL(url).searchParams
+      const offset = Number(params.get('offset'))
+      const count = Number(params.get('count'))
+      requests.push({ offset, count })
+      const start = offset === 200 && count === 200 ? 0 : offset
+      const length = offset === 200 && count === 200 ? 200
+        : offset === 200 && count === 100 ? 100 : Math.min(200, 350 - offset)
+      return { ok: true, status: 200, json: async () => ({ response: {
+        count: 350,
+        items: Array.from({ length }, (_, i) => ({ id: start + i, owner_id: 1 })),
+      } }) }
+    }
+    const tracks = await vkAudioGetWith(fetcher, 'T', async () => {})
+    expect(tracks).toHaveLength(350)
+    expect(requests).toEqual([
+      { offset: 0, count: 200 },
+      { offset: 200, count: 200 },
+      { offset: 200, count: 100 },
+      { offset: 300, count: 200 },
+    ])
+  })
   it('does not silently return a partial library if a later page is empty', async () => {
     let page = 0
     const fetcher: Fetcher = async () => ({ ok: true, status: 200, json: async () => ({
@@ -64,6 +106,19 @@ describe('vkAudioGetWith', () => {
   it('stops repeated pages instead of looping or returning duplicates', async () => {
     const fetcher = okFetcher({response:{count:3,items:[{id:1,owner_id:1}]}})
     await expect(vkAudioGetWith(fetcher, 'T', async () => {})).rejects.toThrow('повторяет страницу')
+  })
+  it('rejects a smaller retry that only reorders IDs already imported', async () => {
+    const fetcher: Fetcher = async (url) => {
+      const params = new URL(url).searchParams
+      const offset = Number(params.get('offset'))
+      const items = offset === 0
+        ? [{ id: 1, owner_id: 1 }, { id: 2, owner_id: 1 }]
+        : params.get('count') === '100'
+          ? [{ id: 2, owner_id: 1 }]
+          : [{ id: 1, owner_id: 1 }, { id: 2, owner_id: 1 }]
+      return { ok: true, status: 200, json: async () => ({ response: { count: 4, items } }) }
+    }
+    await expect(vkAudioGetWith(fetcher, 'T', async () => {})).rejects.toThrow('позиции 2 из 4')
   })
   it('builds the audio.get URL with token and API version', async () => {
     const fetcher = okFetcher({ response: { count: 0, items: [] } })
@@ -121,11 +176,11 @@ describe('vkAudioGetWith', () => {
     await expect(vkAudioGetWith(fetcher, 'T')).rejects.toThrow(/503/)
   })
 
-  it('requests the first page with count=6000 and offset=0', async () => {
+  it('requests the first page with count=200 and offset=0', async () => {
     const fetcher = okFetcher({ response: { count: 0, items: [] } })
     await vkAudioGetWith(fetcher, 'T')
     const url = (fetcher as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-    expect(url).toContain('count=6000')
+    expect(url).toContain('count=200')
     expect(url).toContain('offset=0')
   })
 

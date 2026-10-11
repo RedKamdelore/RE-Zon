@@ -29,7 +29,7 @@ function makeBase(overrides: Partial<PersistedData> = {}): PersistedData {
 
 describe('libraryStore.addTracks', () => {
   beforeEach(() => {
-    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    useLibraryStore.setState({ tracks: [], loading: false })
     setPersistedBase(null)
   })
 
@@ -124,7 +124,7 @@ describe('libraryStore.addTracks', () => {
 
 describe('libraryStore.init imported tracks', () => {
   beforeEach(() => {
-    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    useLibraryStore.setState({ tracks: [], loading: false })
     setPersistedBase(null)
   })
 
@@ -148,20 +148,18 @@ describe('libraryStore.init imported tracks', () => {
     expect(useLibraryStore.getState().tracks.map((t) => t.id)).toEqual(['local:a', 'vk:1'])
   })
 
-  it('restores persisted importedTracks over the demo library and dedupes by id', async () => {
-    ;(globalThis as Record<string, unknown>).window = {
-      api: { demoLibrary: vi.fn().mockResolvedValue([vkTrack]) },
-    }
+  it('restores persisted importedTracks without adding demo records to an empty local library', async () => {
+    const scanLibrary = vi.fn()
+    ;(globalThis as Record<string, unknown>).window = { api: { scanLibrary } }
     await useLibraryStore.getState().init(makeBase({ musicFolders: [], importedTracks: [vkTrack] }))
-    // дубликат из importedTracks отброшен — демо-трек с тем же id уже есть
     expect(useLibraryStore.getState().tracks.map((t) => t.id)).toEqual(['vk:1'])
-    expect(useLibraryStore.getState().usingDemo).toBe(true)
+    expect(scanLibrary).not.toHaveBeenCalled()
   })
 })
 
 describe('libraryStore.addFolder', () => {
   beforeEach(() => {
-    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    useLibraryStore.setState({ tracks: [], loading: false })
     usePlaylistStore.setState({ playlists: [], loaded: false })
     setPersistedBase(null)
   })
@@ -218,7 +216,7 @@ describe('libraryStore.addFolder', () => {
 
 describe('libraryStore.removeFolder', () => {
   beforeEach(() => {
-    useLibraryStore.setState({ tracks: [], loading: false, usingDemo: false })
+    useLibraryStore.setState({ tracks: [], loading: false })
     setPersistedBase(null)
   })
 
@@ -239,20 +237,18 @@ describe('libraryStore.removeFolder', () => {
     expect((saveData.mock.calls[0][0] as PersistedData).musicFolders).toEqual(['C:\\Music'])
     expect(getPersistedBase()?.musicFolders).toEqual(['C:\\Music'])
     expect(scanLibrary).toHaveBeenCalledWith(['C:\\Music'])
-    expect(useLibraryStore.getState().usingDemo).toBe(false)
   })
 
-  it('falls back to demo library when the last folder is removed', async () => {
-    const demo: Track[] = []
+  it('keeps the library empty when the last local folder is removed', async () => {
     const saveData = vi.fn().mockResolvedValue(undefined)
-    const demoLibrary = vi.fn().mockResolvedValue(demo)
-    ;(globalThis as Record<string, unknown>).window = { api: { saveData, demoLibrary } }
+    const scanLibrary = vi.fn()
+    ;(globalThis as Record<string, unknown>).window = { api: { saveData, scanLibrary } }
     setPersistedBase(makeBase())
 
     await useLibraryStore.getState().removeFolder('C:\\Music')
     expect(getPersistedBase()?.musicFolders).toEqual([])
-    expect(demoLibrary).toHaveBeenCalled()
-    expect(useLibraryStore.getState().usingDemo).toBe(true)
+    expect(scanLibrary).not.toHaveBeenCalled()
+    expect(useLibraryStore.getState().tracks).toEqual([])
   })
 })
 
@@ -266,7 +262,6 @@ describe('libraryStore hidden tracks', () => {
       tracks: [t('local:a'), t('local:b'), t('local:c')],
       hiddenIds: [],
       loading: false,
-      usingDemo: false,
     })
     setPersistedBase(null)
   })
@@ -346,7 +341,7 @@ it('enriches a placeholder album while preserving custom metadata',()=>{
 it('keeps imported tracks when local folders are rescanned or removed',async()=>{
  const imported:Track={id:'vk:keep',sourceId:'vk',title:'Keep',artist:'A',album:'X',durationSec:30,filePath:'https://example.com/keep'}
  const local:Track={...imported,id:'local:old',sourceId:'local'}
- vi.stubGlobal('window',{api:{saveData:vi.fn().mockResolvedValue(undefined),pickFolder:vi.fn().mockResolvedValue('D:/New'),scanLibrary:vi.fn().mockResolvedValue([]),demoLibrary:vi.fn().mockResolvedValue([])}})
+ vi.stubGlobal('window',{api:{saveData:vi.fn().mockResolvedValue(undefined),pickFolder:vi.fn().mockResolvedValue('D:/New'),scanLibrary:vi.fn().mockResolvedValue([])}})
  setPersistedBase(makeBase({musicFolders:[]}));useLibraryStore.setState({tracks:[local,imported]})
  try {
   await useLibraryStore.getState().addFolder()

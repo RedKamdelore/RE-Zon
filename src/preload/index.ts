@@ -55,7 +55,6 @@ const api = {
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('library:pickFolder'),
   scanLibrary: (folders: string[]): Promise<Track[]> =>
     ipcRenderer.invoke('library:scan', folders),
-  demoLibrary: (): Promise<Track[]> => ipcRenderer.invoke('library:demo'),
   vkImport: (): Promise<VkImportResult> => ipcRenderer.invoke('vk:import'),
   findAlbumCover: (artist:string,album:string):Promise<string|null> => ipcRenderer.invoke('artwork:album',artist,album),
   scSearch: (query: string, cursor?: string): Promise<ScSearchResult> => ipcRenderer.invoke('sc:search', query, cursor),

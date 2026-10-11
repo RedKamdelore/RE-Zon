@@ -5,6 +5,7 @@ import { AudioEngine, resolveTrackUrl, clampVolume } from '../audio/engine'
 import { useSettingsStore } from './settingsStore'
 import { recordPlay } from './statsStore'
 import { isScrobblable, flushSoon, enqueueScrobble } from '../scrobbler'
+import { canSaveOffline } from '@shared/offline'
 
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
@@ -87,7 +88,7 @@ export function createPlayerStore(
     onReady: (url: string) => void,
     onFail: (e: unknown) => void,
   ): void => {
-    if (track.sourceId === 'direct' && typeof window !== 'undefined' && typeof window.api?.offlineResolve === 'function') {
+    if ((track.sourceId === 'direct' || track.sourceId === 'vk') && typeof window !== 'undefined' && typeof window.api?.offlineResolve === 'function') {
       window.api.offlineResolve(track.id).then(
         path => onReady(resolveTrackUrl(path ? { ...track, filePath: path } : track)),
         () => onReady(resolveTrackUrl(track)),
@@ -105,8 +106,8 @@ export function createPlayerStore(
     }
   }
 
-  const saveDirectAfterPlay = (track: Track): void => {
-    if (track.sourceId === 'direct' && typeof window !== 'undefined') {
+  const autoSaveAfterPlay = (track: Track): void => {
+    if (canSaveOffline(track) && typeof window !== 'undefined') {
       void window.api?.offlineAutoQueue?.(track).catch(error => console.warn('Automatic offline save failed:', error))
     }
   }
@@ -138,7 +139,7 @@ export function createPlayerStore(
         // За время резолва пользователь мог переключить трек — не переигрываем
         const current = get().queue[get().order[get().pos]]
         if (revision === startRevision) resolving = false
-        if (revision === startRevision && get().playing && current?.id === track.id) { pendingPlayId = track.id; watchStart(engine.play(url), revision, track.id); saveDirectAfterPlay(track) }
+        if (revision === startRevision && get().playing && current?.id === track.id) { pendingPlayId = track.id; watchStart(engine.play(url), revision, track.id); autoSaveAfterPlay(track) }
       },
       (e) => {
         console.error('soundcloud resolve failed:', e)
@@ -166,7 +167,7 @@ export function createPlayerStore(
         if (revision !== startRevision || !get().playing || current?.id !== track.id) return
         pendingPlayId = track.id
         watchStart(engine.crossfadeTo?.(url, xfSec), revision, track.id)
-        saveDirectAfterPlay(track)
+        autoSaveAfterPlay(track)
       },
       (e) => {
         console.error('soundcloud resolve failed:', e)

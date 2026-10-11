@@ -12,8 +12,6 @@ files:
   - out/**
   - package.json
 extraResources:
-  - from: resources/demo
-    to: demo
   - from: resources/icon.png
     to: icon.png
   - from: resources/updates.json

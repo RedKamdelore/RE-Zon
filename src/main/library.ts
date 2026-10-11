@@ -51,24 +51,3 @@ export async function scanFolders(folders: string[]): Promise<Track[]> {
   const tracks = await Promise.all(files.map(toTrack))
   return tracks.filter((t): t is Track => t !== null)
 }
-
-/** Демо-треки из resources/demo — когда локальной музыки нет */
-export function demoTracks(demoDir: string): Track[] {
-  // порядок NAMES соответствует алфавитному порядку имён файлов (sort ниже)
-  const NAMES: Array<[string, string]> = [
-    ['Analog Dreams', 'Sampled Souls'], ['Neon Sunset', 'DXD Ensemble'],
-    ['Night Drive', 'DXD Ensemble'], ['Rainy Loops', 'Sampled Souls'],
-  ]
-  return readdirSync(demoDir)
-    .filter(f => f.endsWith('.wav'))
-    .sort()
-    .map((f, i) => ({
-      id: `demo:${f}`,
-      sourceId: 'demo',
-      title: NAMES[i]?.[0] ?? f,
-      artist: NAMES[i]?.[1] ?? 'Demo',
-      album: 'Re:Zon Demo Pack',
-      durationSec: 20,
-      filePath: join(demoDir, f),
-    }))
-}

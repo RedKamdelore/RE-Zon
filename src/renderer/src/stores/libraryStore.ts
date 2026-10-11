@@ -16,10 +16,9 @@ interface LibraryState {
   hiddenIds: string[] // id скрытых треков (persist → hiddenTracks); tracks хранит их все
   lastHiddenIds: string[]
   loading: boolean
-  usingDemo: boolean
   init: (data?: PersistedData) => Promise<void> // data из App (единый loadData); без него — сам грузит
   addFolder: () => Promise<void> // pickFolder → persist musicFolders → rescan
-  removeFolder: (folder: string) => Promise<void> // persist без папки → rescan (пусто → демо)
+  removeFolder: (folder: string) => Promise<void> // persist без папки → rescan
   addTracks: (tracks: Track[]) => void // внешние треки (VK и др.): дописывает, дедуп по id
   /** VK-реимпорт: обновляет существующие треки (протухшие url) + добавляет новые; возвращает [обновлено, добавлено] */
   upsertTracks: (tracks: Track[]) => [number, number]
@@ -50,7 +49,6 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
   hiddenIds: [],
   lastHiddenIds: [],
   loading: true,
-  usingDemo: false,
 
   addTracks: (incoming) => {
     const fresh = incoming.filter((t) => !get().tracks.some((x) => x.id === t.id))
@@ -107,13 +105,8 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
       // Персистенс импортированных треков: докидываем их к отсканированной
       // библиотеке, чтобы плейлисты с vk:/sc: id ожили после рестарта
       const imported = d.importedTracks ?? []
-      if (d.musicFolders.length === 0) {
-        const tracks = await window.api.demoLibrary()
-        set({ tracks: mergeById(tracks, imported), hiddenIds, usingDemo: true, loading: false })
-      } else {
-        const tracks = await window.api.scanLibrary(d.musicFolders)
-        set({ tracks: mergeById(tracks, imported), hiddenIds, usingDemo: false, loading: false })
-      }
+      const tracks = d.musicFolders.length > 0 ? await window.api.scanLibrary(d.musicFolders) : []
+      set({ tracks: mergeById(tracks, imported), hiddenIds, loading: false })
     } catch (e) {
       console.error('library init failed:', e)
       set({ loading: false })
@@ -162,7 +155,7 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     setPersistedBase(updated)
     set({ loading: true })
     const tracks = await window.api.scanLibrary(musicFolders)
-    set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), usingDemo: false, loading: false })
+    set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), loading: false })
   },
 
   removeFolder: async (folder) => {
@@ -173,12 +166,7 @@ export const useLibraryStore = create<LibraryState>()((set, get) => ({
     await window.api.saveData(updated)
     setPersistedBase(updated)
     set({ loading: true })
-    if (musicFolders.length === 0) {
-      const tracks = await window.api.demoLibrary()
-      set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), usingDemo: true, loading: false })
-    } else {
-      const tracks = await window.api.scanLibrary(musicFolders)
-      set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), usingDemo: false, loading: false })
-    }
+    const tracks = musicFolders.length > 0 ? await window.api.scanLibrary(musicFolders) : []
+    set({ tracks: mergeById(tracks, get().tracks.filter(isImported)), loading: false })
   },
 }))

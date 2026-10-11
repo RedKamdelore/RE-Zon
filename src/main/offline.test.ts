@@ -4,7 +4,7 @@ import { rmdirSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { OfflineDownloads } from './offline'
-import { directAudioUrl } from '../shared/offline'
+import { canSaveOffline, directAudioUrl } from '../shared/offline'
 
 let root: string
 const request = {trackId:'direct:one',title:'Запись',artist:'Автор',url:'https://music.example.org/song.mp3'}
@@ -23,6 +23,18 @@ describe('direct offline downloads', () => {
     expect(() => directAudioUrl('https://127.0.0.1/song.mp3')).toThrow()
     expect(() => directAudioUrl('https://music.example.org/page.html')).toThrow()
     expect(() => directAudioUrl('https://user:pass@music.example.org/song.mp3')).toThrow()
+  })
+  it('accepts direct VK audio with signed query parameters but skips stream manifests', () => {
+    expect(canSaveOffline({sourceId:'vk',filePath:'https://psv4.vkuseraudio.net/c1/song.mp3?extra=signed'})).toBe(true)
+    expect(canSaveOffline({sourceId:'vk',filePath:'https://psv4.vkuseraudio.net/c1/index.m3u8?extra=signed'})).toBe(false)
+    expect(canSaveOffline({sourceId:'soundcloud',filePath:'https://example.org/song.mp3'})).toBe(false)
+  })
+  it('stores a VK direct file using its stable track ID', async () => {
+    const vkRequest = {...request,trackId:'vk:account:1_2',url:'https://psv4.vkuseraudio.net/c1/song.mp3?extra=signed'}
+    const manager = new OfflineDownloads(root,()=>{},vi.fn(async()=>audio()) as unknown as typeof fetch)
+    manager.queue(vkRequest)
+    await ready(manager,'saved')
+    expect(readFileSync(manager.resolve(vkRequest.trackId)!)).toEqual(content)
   })
   it('stores a complete audio file, survives restart, plays without fetch and removes only its copy', async () => {
     const fetcher=vi.fn(async()=>audio()) as unknown as typeof fetch

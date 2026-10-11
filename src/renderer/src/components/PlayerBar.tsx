@@ -4,6 +4,7 @@ import { usePlayerStore } from '../stores/playerStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { persistPatch } from '../stores/playlistStore'
 import { fmt } from '../utils/format'
+import { OfflineStatusIcon, offlinePercent, useOfflineStatus } from './OfflineStatus'
 import {
   PlayIcon,
   PauseIcon,
@@ -54,6 +55,8 @@ export default function PlayerBar({ onTogglePanel, onExpand, hideModeShortcuts =
   const cycleRepeat = usePlayerStore((s) => s.cycleRepeat)
 
   const track = order.length > 0 ? queue[order[pos]] : undefined
+  const offlineItem = useOfflineStatus(track?.id)
+  const downloadPercent = offlinePercent(offlineItem)
   const disabled = queue.length === 0
   const favoriteIds = useFavoritesStore((s) => s.ids)
   const toggleFavorite = useFavoritesStore((s) => s.toggle)
@@ -76,7 +79,7 @@ export default function PlayerBar({ onTogglePanel, onExpand, hideModeShortcuts =
           <div className="pb-track-info" onClick={onExpand}>
             <div className="pb-title">{track.title}</div>
             <div className="pb-artist">
-              {track.artist}
+              <span className="pb-artist-name">{track.artist}</span>
               {SOURCE_BADGES[track.sourceId] && (
                 <span
                   className={`src-badge src-${track.sourceId}`}
@@ -85,6 +88,7 @@ export default function PlayerBar({ onTogglePanel, onExpand, hideModeShortcuts =
                   {SOURCE_BADGES[track.sourceId].render(12)}
                 </span>
               )}
+              <OfflineStatusIcon track={track} item={offlineItem}/>
             </div>
           </div>
         )}
@@ -145,7 +149,7 @@ export default function PlayerBar({ onTogglePanel, onExpand, hideModeShortcuts =
         <div className="pb-seek">
           <span>{fmt(currentSec)}</span>
           <input
-            className="slider"
+            className={`slider${downloadPercent !== undefined ? ' has-download-progress' : ''}${offlineItem?.phase === 'downloading' && downloadPercent === undefined ? ' download-unknown' : ''}`}
             aria-label="Позиция воспроизведения"
             aria-valuetext={`${fmt(currentSec)} из ${fmt(track?.durationSec ?? 0)}`}
             disabled={!track?.durationSec}
@@ -154,7 +158,7 @@ export default function PlayerBar({ onTogglePanel, onExpand, hideModeShortcuts =
             max={track?.durationSec ?? 0}
             step={0.1}
             value={Math.min(currentSec, track?.durationSec ?? 0)}
-            style={progressStyle(currentSec, track?.durationSec ?? 0)}
+            style={{ ...progressStyle(currentSec, track?.durationSec ?? 0), '--download-progress': `${downloadPercent ?? 0}%` } as CSSProperties}
             onChange={(e) => seek(Number(e.target.value))}
           />
           <span>{fmt(track?.durationSec ?? 0)}</span>

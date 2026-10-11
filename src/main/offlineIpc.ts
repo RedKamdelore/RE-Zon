@@ -5,6 +5,7 @@ import type { Track } from '../shared/types'
 import { CACHE_LIMITS, DEFAULT_OFFLINE_SETTINGS, type OfflineSettings } from '../shared/offlineSettings'
 import { calculateStorageUsage } from './storageUsage'
 import { OfflineDownloads } from './offline'
+import { canSaveOffline } from '../shared/offline'
 
 export function registerOfflineDownloads(): void {
   const settingsPath = join(app.getPath('userData'), 'offline-settings.json')
@@ -21,11 +22,11 @@ export function registerOfflineDownloads(): void {
   ipcMain.handle('offline:list', () => manager.list())
   ipcMain.handle('offline:resolve', (_event, id: string) => typeof id === 'string' ? manager.resolve(id) : null)
   ipcMain.handle('offline:queue', (_event, track: Track) => {
-    if (!track || track.sourceId !== 'direct') throw new Error('Этот источник не предоставляет прямую загрузку.')
+    if (!track || !canSaveOffline(track)) throw new Error('Для этой записи нет прямого аудиофайла для сохранения.')
     return manager.queue({trackId:track.id,title:track.title,artist:track.artist,url:track.filePath})
   })
   ipcMain.handle('offline:autoQueue', (_event, track: Track) => {
-    if (!settings.autoSaveDirect || !track || track.sourceId !== 'direct') return manager.list()
+    if (!settings.autoSaveDirect || !track || !canSaveOffline(track)) return manager.list()
     return manager.queue({trackId:track.id,title:track.title,artist:track.artist,url:track.filePath})
   })
   ipcMain.handle('offline:settings', () => ({ ...settings }))

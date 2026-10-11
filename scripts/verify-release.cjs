@@ -17,7 +17,7 @@ const privateName = /(?:^|\/)(?:player-data\.json|updates-settings\.json|\.env(?
 const privateEntries = [...files].filter(file => privateName.test(file))
 if (privateEntries.length) throw new Error(`Private or credential-like files found in app.asar: ${privateEntries.join(', ')}`)
 const resourceNames = fs.readdirSync(path.join(folder, 'win-unpacked', 'resources'))
-const allowedResources = new Set(['app.asar', 'app-update.yml', 'default_app.asar', 'demo', 'elevate.exe', 'icon.png', 'updates.json'])
+const allowedResources = new Set(['app.asar', 'app-update.yml', 'default_app.asar', 'elevate.exe', 'icon.png', 'updates.json'])
 const unexpectedResources = resourceNames.filter(name => !allowedResources.has(name))
 if (unexpectedResources.length) throw new Error(`Unexpected packaged resources: ${unexpectedResources.join(', ')}`)
 const readJson = file => JSON.parse(asar.extractFile(archive, file.split('/').join(path.sep)).toString())

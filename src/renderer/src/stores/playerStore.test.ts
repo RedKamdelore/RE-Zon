@@ -846,6 +846,41 @@ describe('direct audio offline playback', () => {
       await vi.waitFor(() => expect(calls.play).toEqual([directTrack.filePath]))
     }
   })
+  it('auto saves a playable VK file and uses the local copy on the next play', async () => {
+    const vkTrack: Track = {...directTrack,id:'vk:account:1_2',sourceId:'vk',filePath:'https://psv4.vkuseraudio.net/c1/song.mp3?extra=signed'}
+    const { engine, calls } = makeFakeEngine()
+    const offlineResolve = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce('C:\\ReZon\\offline\\song.mp3')
+    const offlineAutoQueue = vi.fn().mockResolvedValue([])
+    ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve, offlineAutoQueue } }
+    const store = createPlayerStore(engine)
+    store.getState().playTracks([vkTrack], 0)
+    await vi.waitFor(() => expect(calls.play).toEqual([vkTrack.filePath]))
+    expect(offlineAutoQueue).toHaveBeenCalledWith(vkTrack)
+    store.getState().playTracks([vkTrack], 0)
+    await vi.waitFor(() => expect(calls.play).toHaveLength(2))
+    expect(calls.play[1]).toBe(mediaUrl('C:\\ReZon\\offline\\song.mp3'))
+  })
+
+  it('does not queue a VK stream manifest as a direct file', async () => {
+    const vkStream: Track = {...directTrack,id:'vk:account:stream',sourceId:'vk',filePath:'https://psv4.vkuseraudio.net/c1/index.m3u8'}
+    const { engine, calls } = makeFakeEngine()
+    const offlineAutoQueue = vi.fn().mockResolvedValue([])
+    const offlineResolve = vi.fn().mockResolvedValue(null)
+    ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve, offlineAutoQueue } }
+    createPlayerStore(engine).getState().playTracks([vkStream], 0)
+    await vi.waitFor(() => expect(calls.play).toEqual([vkStream.filePath]))
+    expect(offlineResolve).toHaveBeenCalledWith(vkStream.id)
+    expect(offlineAutoQueue).not.toHaveBeenCalled()
+  })
+
+  it('prefers an existing VK copy even if the refreshed stream URL is not a direct file', async () => {
+    const vkStream: Track = {...directTrack,id:'vk:account:stream',sourceId:'vk',filePath:'https://psv4.vkuseraudio.net/c1/index.m3u8'}
+    const { engine, calls } = makeFakeEngine()
+    const offlineResolve = vi.fn().mockResolvedValue('C:\\ReZon\\offline\\saved.mp3')
+    ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve } }
+    createPlayerStore(engine).getState().playTracks([vkStream], 0)
+    await vi.waitFor(() => expect(calls.play).toEqual([mediaUrl('C:\\ReZon\\offline\\saved.mp3')]))
+  })
 })
 
 describe('alternate playback sources',()=>{

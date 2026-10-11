@@ -57,9 +57,16 @@ async function runImport(partition: string): Promise<ImportedTrack[]> {
     const auth = context as { token: string; query: string }
     return vkAudioGetWith(async (requestUrl) => {
       const params = new URL(requestUrl).searchParams
+      const requestedCount = Number(params.get('count'))
+      const count = Number.isInteger(requestedCount) && requestedCount > 0
+        ? Math.min(200, requestedCount) : 200
       const request = {
         url: `https://web.api.vk.ru/method/audio.get?${auth.query}`,
-        body: new URLSearchParams({ access_token: auth.token, count: '200', offset: params.get('offset') ?? '0' }).toString(),
+        body: new URLSearchParams({
+          access_token: auth.token,
+          count: String(count),
+          offset: params.get('offset') ?? '0',
+        }).toString(),
       }
       const result = await win.webContents.executeJavaScript(`(async () => {
         const request = ${JSON.stringify(request)};
