@@ -1,0 +1,51 @@
+/* A single transport stays in place while the workspace changes above it. */
+.app:not(.mini){grid-template-rows:76px minmax(0,1fr) auto}
+.player-dock{grid-column:2;grid-row:3;min-width:0;border-top:1px solid var(--border-subtle);background:var(--bg-panel);box-shadow:inset 0 1px rgba(255,255,255,.025),0 -8px 28px #0001;z-index:15}
+.player-dock .playerbar{display:grid;grid-template-columns:minmax(160px,1fr) minmax(245px,520px) minmax(278px,1fr);align-items:center;gap:24px;max-width:1600px;margin:auto;padding:12px 24px;min-height:96px}
+.player-dock .pb-left{min-width:0;flex-direction:row;gap:12px;text-align:left}
+.player-dock .pb-cover{position:relative;width:52px;height:52px;margin:0;flex-shrink:0;border:1px solid var(--border-subtle);padding:0;border-radius:11px;color:var(--accent);box-shadow:0 3px 10px #0002}
+.pb-cover-action{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;background:#10131888;opacity:0;transition:opacity 160ms}
+.pb-cover:hover .pb-cover-action,.pb-cover:focus-visible .pb-cover-action{opacity:1}
+.player-dock .pb-track-info{min-width:0;flex:1}
+.player-dock .pb-title{font-size:13px;font-weight:600;line-height:1.4}
+.pb-title-button{display:block;max-width:100%;padding:0;border:0;background:transparent;text-align:left;color:var(--text-primary)}
+.pb-title-button:hover{color:var(--accent)}
+.player-dock .pb-artist{justify-content:flex-start;font-size:11px;gap:6px;margin-top:4px;min-width:0}
+.player-dock .pb-heart{position:static;width:30px;height:32px}
+.player-dock .pb-center{min-width:0;gap:8px}
+.player-dock .pb-controls{order:0;gap:8px}
+.player-dock .pb-controls .icon-btn{width:32px;height:32px}
+.player-dock .play-btn{width:40px;height:40px;border-radius:12px;margin-inline:2px}
+.player-dock .pb-stop-control{display:inline-flex}
+.player-dock .pb-stop-inline{display:none}
+.player-dock .pb-seek{gap:9px}
+.player-dock .pb-seek>span{min-width:30px;font-size:10px}
+.player-dock .pb-seek>span:last-of-type{text-align:right}
+.player-dock .pb-right{justify-content:flex-end;gap:3px}
+.player-dock .pb-right>button{display:inline-flex}
+.player-dock .pb-right .icon-btn{width:30px;height:32px}
+.player-dock .pb-right>.slider{width:68px;margin-left:3px}
+.player-dock .pb-mute{margin-left:7px;border-left:1px solid var(--border-subtle);border-radius:0 7px 7px 0}
+.pb-mute[aria-pressed=true]{opacity:.65}
+.player-dock .slider{height:5px;transition:box-shadow 160ms}
+.player-dock .slider:hover{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
+.player-dock .pb-error{max-height:34px;overflow:auto;text-align:left}
+@media(max-width:1100px){
+  .player-dock .playerbar{gap:12px;padding:10px 18px;grid-template-columns:minmax(135px,1fr) minmax(220px,1.4fr) auto}
+  .player-dock .pb-controls{gap:4px}.player-dock .pb-right>.slider{width:52px}.player-dock .pb-right .icon-btn{width:27px}
+  .player-dock .pb-left{gap:9px}.player-dock .pb-cover{width:44px;height:44px}.player-dock .pb-heart{width:26px}
+}
+@media(max-width:1040px){.app:not(.mini){grid-template-rows:68px minmax(0,1fr) auto}}
+@media(max-width:920px){.player-dock .pb-mini{display:none}.player-dock .pb-right>.slider{width:44px}}
+@media(max-width:780px){
+  .player-dock .playerbar{grid-template-columns:minmax(0,1fr) minmax(180px,1fr);grid-template-areas:'track tools' 'controls timeline';gap:8px 12px;padding:10px 14px;min-height:110px}
+  .player-dock .pb-left{grid-area:track}.player-dock .pb-right{grid-area:tools}.player-dock .pb-center{display:contents}
+  .player-dock .pb-controls{grid-area:controls;justify-content:flex-start;gap:2px}.player-dock .pb-seek{grid-area:timeline}
+  .player-dock .pb-error{grid-column:1/-1;margin:0}.player-dock .pb-title{font-size:12px}
+}
+@media(max-width:540px){
+  .player-dock .playerbar{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:'track tools' 'controls controls' 'timeline timeline';gap:7px}
+  .player-dock .pb-controls{justify-content:center;gap:8px}.player-dock .pb-right>.slider,.player-dock .pb-mute{display:none}
+  .player-dock .pb-cover{width:38px;height:38px}.player-dock .pb-heart{display:none}
+}
+@media(forced-colors:active){.player-dock{border-top:1px solid CanvasText}.pb-cover-action{background:Canvas;color:CanvasText}}

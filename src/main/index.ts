@@ -100,7 +100,7 @@ if (profileReady) app.whenReady().then(() => {
       return new Response('Not found', { status: 404 })
     }
   })
-  trayPopup = new TrayPopup(() => { mainWindow.show(); mainWindow.send('expand') }, command => mainWindow.send(command), () => mainWindow.current())
+  trayPopup = new TrayPopup(() => mainWindow.show(), command => mainWindow.send(command), () => mainWindow.current())
   mainWindow.ensure()
   registerIpc(() => mainWindow.ensure())
   registerOfflineDownloads()

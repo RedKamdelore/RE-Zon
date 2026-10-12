@@ -19,6 +19,7 @@ useLyricsStore.setState({reports:{[track.id]:{best:null,checkedAll:true,demo:tru
   {source:'synclrc',status:'missing'},
 ]}}})
 getPlayerEngine().load(track.filePath)
-useWorkspaceStore.setState({fullPlayerOpen:true,fullPlayerMode:'lyrics'})
+const requestedMode = new URLSearchParams(location.search).get('mode')
+useWorkspaceStore.setState({fullPlayerOpen:true,fullPlayerMode:['cover','queue','eq'].includes(requestedMode) ? requestedMode : 'lyrics'})
 await import('./src/main')
 </script></body></html>

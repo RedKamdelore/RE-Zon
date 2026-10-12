@@ -3,7 +3,6 @@ import type { Track } from '@shared/types'
 import { getPlayerEngine, usePlayerStore } from '../stores/playerStore'
 import { useWorkspaceStore, type FullPlayerMode } from '../stores/workspaceStore'
 import Artwork from './Artwork'
-import PlayerBar from './PlayerBar'
 import { LyricsPanel, QueuePanel } from './RightPanel'
 import Equalizer from './Equalizer'
 import ThemePrismCanvas from './ThemePrismCanvas'
@@ -24,7 +23,7 @@ function NowPlayingSide({ track }: { track?: Track }) {
   </div>
 }
 
-export default function FullPlayer({ onMini }: { onMini: () => void }) {
+export default function FullPlayer() {
   const mode = useWorkspaceStore(s => s.fullPlayerMode)
   const setMode = useWorkspaceStore(s => s.setFullPlayerMode)
   const effect = useWorkspaceStore(s => s.playerEffect)
@@ -87,13 +86,11 @@ export default function FullPlayer({ onMini }: { onMini: () => void }) {
     </div>
     <div id="full-player-panel" className="full-player-content" role="tabpanel" aria-labelledby={`full-player-tab-${mode}`}>
       {mode === 'cover' && <div className="full-player-art-stage"><div className="full-player-art"><Artwork src={track?.coverDataUrl} artist={track?.artist ?? 'Re:Zon'} album={track?.album ?? ''}/></div><div className="full-player-caption"><span>СЕЙЧАС ИГРАЕТ</span><h1>{track?.title ?? 'Выберите музыку'}</h1><p>{track?.artist ?? 'Re:Zon'}{track?.album ? ` · ${track.album}` : ''}</p></div></div>}
-      {mode === 'lyrics' && <div className="full-player-split"><NowPlayingSide track={track}/><div className="full-player-lyrics-body"><LyricsPanel /></div></div>}
-      {mode === 'queue' && <div className="full-player-split"><NowPlayingSide track={track}/><div className="full-player-queue"><h2>Очередь воспроизведения</h2><QueuePanel showCurrent={false}/></div></div>}
-      {mode === 'eq' && <div className="full-player-split"><NowPlayingSide track={track}/><div className="full-player-eq"><h2>Звук</h2><Equalizer /></div></div>}
+      {mode !== 'cover' && <div className="full-player-split"><NowPlayingSide track={track}/>
+        {mode === 'lyrics' && <div className="full-player-lyrics-body"><LyricsPanel /></div>}
+        {mode === 'queue' && <div className="full-player-queue"><h2>Очередь воспроизведения</h2><QueuePanel showCurrent={false}/></div>}
+        {mode === 'eq' && <div className="full-player-eq"><h2>Звук</h2><Equalizer /></div>}
+      </div>}
     </div>
-    <div className="full-player-transport"><PlayerBar onTogglePanel={panel => {
-      if (panel === 'mini') onMini()
-      else setMode(panel)
-    }} hideModeShortcuts /></div>
   </section>
 }

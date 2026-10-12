@@ -9,6 +9,7 @@ import './styles/fullPlayer.css'
 import './styles/tactility.css'
 import './styles/themeStudio.css'
 import './styles/motion.css'
+import './styles/playerDock.css'
 import { applyTheme, DEFAULT_APPEARANCE } from './theme'
 
 applyTheme(DEFAULT_APPEARANCE.theme)

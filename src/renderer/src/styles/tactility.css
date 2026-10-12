@@ -11,12 +11,6 @@
   box-shadow: var(--tactile-edge);
 }
 .command-bar { backdrop-filter: blur(12px); }
-.main>section:not(.full-player),
-.main>.settings-workspace { animation: tactile-view-enter 230ms var(--tactile-ease) both; }
-@keyframes tactile-view-enter {
-  from { opacity: .82;transform: translateY(7px); }
-  to { opacity: 1;transform: none; }
-}
 
 .material-surface,
 .route-card,
@@ -50,11 +44,9 @@
 .full-player-effect-prism::before {
   background-image: linear-gradient(130deg,color-mix(in srgb,var(--bg-panel) 35%,transparent),color-mix(in srgb,var(--bg-app) 63%,transparent)),url('../assets/grain.svg');
 }
-.full-player-header,
-.full-player-transport {
+.full-player-header {
   box-shadow: inset 0 1px rgba(255,255,255,.055);
 }
-.full-player-transport { backdrop-filter: blur(18px) saturate(1.15); }
 .full-player-modes { box-shadow: inset 0 2px 5px #0002,var(--tactile-edge); }
 .full-player-modes button.active { box-shadow: var(--tactile-edge),0 2px 7px #0003,inset 0 0 0 1px color-mix(in srgb,var(--accent) 25%,transparent); }
 .full-player-lyrics-body .rp-lyrics-line:not(.active) { opacity: .52; }
@@ -167,11 +159,11 @@
 @media (forced-colors:active) {
   .material-surface,.route-card,.source-banner,.local-source,.pl-header,.full-player::before,.full-player-queue .rp-row,.full-player-eq .eq-tone,.full-player-eq .eq-crossfade,.skin-card,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { background-image: none;box-shadow: none; }
   .full-player-art::after,.full-player-side-cover::after { display: none; }
-  .command-bar,.full-player-transport,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { backdrop-filter: none; }
+  .command-bar,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { backdrop-filter: none; }
 }
 @media (prefers-contrast:more) {
   .material-surface,.route-card,.source-banner,.local-source,.pl-header,.full-player::before,.full-player-queue .rp-row,.full-player-eq .eq-tone,.full-player-eq .eq-crossfade,.skin-card,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { background-image: none; }
-  .command-bar,.full-player-transport,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { backdrop-filter: none; }
+  .command-bar,.ctx-menu,.command-menu,.rp-lyrics-menu,.search-palette { backdrop-filter: none; }
   .full-player-ambient,.full-player-ambient-secondary,.full-player-pulse { opacity: .06;animation: none; }
   .full-player-lyrics-body .rp-lyrics-line:not(.active) { opacity: .75; }
 }

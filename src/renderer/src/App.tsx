@@ -14,11 +14,12 @@ import CollectionView from './components/CollectionView'
 import RadioView from './components/RadioView'
 import FavoritesView from './components/FavoritesView'
 import MiniPlayer from './components/MiniPlayer'
+import PlayerBar from './components/PlayerBar'
 import FullPlayer from './components/FullPlayer'
 import { useHotkeys } from './hotkeys'
 import { usePlayerStore, initPlayerSubscriptions, getPlayerEngine } from './stores/playerStore'
 import { useLibraryStore, visibleTracks } from './stores/libraryStore'
-import { usePlaylistStore, setPersistedBase } from './stores/playlistStore'
+import { usePlaylistStore, setPersistedBase, persistPatch } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useLyricsStore, searchLyrics } from './stores/lyricsStore'
 import { useStatsStore } from './stores/statsStore'
@@ -107,6 +108,7 @@ export default function App() {
   }, [])
 
   const fullPlayerOpen = useWorkspaceStore(s => s.fullPlayerOpen)
+  const fullPlayerMode = useWorkspaceStore(s => s.fullPlayerMode)
   const searchOpen = useWorkspaceStore(s => s.searchOpen)
   const [mini, setMini] = useState(false)
 
@@ -134,12 +136,22 @@ export default function App() {
       if (cmd === 'next') p.next({ manual: true })
       if (cmd === 'prev') p.prev()
       if (cmd === 'expand') useWorkspaceStore.getState().openFullPlayer()
+      if (cmd === 'lyrics' || cmd === 'queue') useWorkspaceStore.getState().openFullPlayer(cmd)
       if (cmd.startsWith('seek:')) { const sec = Number(cmd.slice(5)); if (Number.isFinite(sec)) p.seek(sec) }
+      if (cmd.startsWith('volume:')) {
+        const volume = Number(cmd.slice(7))
+        if (Number.isFinite(volume) && volume >= 0 && volume <= 1) { p.setVolume(volume); persistPatch({ volume }) }
+      }
     })
   }, [])
 
   useEffect(() => {
     if (!window.api?.publishTrayState) return
+    const readTheme = () => {
+      const css = getComputedStyle(document.documentElement)
+      return Object.fromEntries(['--bg-panel', '--bg-tile', '--text-primary', '--text-secondary', '--accent', '--on-accent', '--border-subtle', '--slider-track'].map(key => [key, css.getPropertyValue(key).trim()]))
+    }
+    let theme = readTheme()
     const publish = () => {
       const state = usePlayerStore.getState()
       const track = state.queue[state.order[state.pos]]
@@ -148,10 +160,16 @@ export default function App() {
         title: track?.title ?? 'Ничего не играет', artist: track?.artist ?? 'Re:Zon', cover: track?.coverDataUrl,
         playing: state.playing, currentSec: state.currentSec,
         durationSec: Number.isFinite(audioDuration) && audioDuration > 0 ? audioDuration : track?.durationSec ?? 0, hasTrack: !!track,
+        volume: state.volume, playbackError: state.playbackError, theme,
       })
     }
     publish()
-    return usePlayerStore.subscribe(publish)
+    const unsubscribePlayer = usePlayerStore.subscribe(publish)
+    let active = true
+    const unsubscribeSettings = useSettingsStore.subscribe((next, previous) => {
+      if (next.appearance.theme !== previous.appearance.theme) queueMicrotask(() => { if (active) { theme = readTheme(); publish() } })
+    })
+    return () => { active = false; unsubscribePlayer(); unsubscribeSettings() }
   }, [])
 
   const playlist = view.name === 'playlist' ? playlists.find((p) => p.id === view.id) : undefined
@@ -177,7 +195,7 @@ export default function App() {
       <UpdateNotice />
       {profileRecovered&&<div className="profile-recovery-banner" role="status">Профиль восстановлен из резервной копии. Повреждённый файл сохранён в папке профиля.<button className="btn-outline" onClick={()=>void window.api.openProfileFolder()}>Открыть папку</button><button className="icon-btn" aria-label="Закрыть уведомление" onClick={()=>setProfileRecovered(false)}>×</button></div>}
       <main className={'main' + (fullPlayerOpen ? ' main-full-player' : '')} ref={mainRef}>
-        {fullPlayerOpen ? <FullPlayer onMini={() => void setMiniMode(true)} /> : <>
+        {fullPlayerOpen ? <FullPlayer /> : <>
         {lastHiddenIds.length > 0 && <div className="tl-bulk-notice" role="status">
           Убрано из библиотеки: {lastHiddenIds.length}. Файлы сохранены.
           <button className="btn-outline" onClick={() => useLibraryStore.getState().unhideTracks(lastHiddenIds)}>Отменить удаление</button>
@@ -201,6 +219,11 @@ export default function App() {
         {view.name === 'radio' && <RadioView trackId={view.trackId} />}
         </>}
       </main>
+      <footer className="player-dock">
+        <PlayerBar expanded={fullPlayerOpen} activePanel={fullPlayerOpen ? fullPlayerMode : undefined}
+          onExpand={() => fullPlayerOpen ? useWorkspaceStore.getState().closeFullPlayer() : useWorkspaceStore.getState().openFullPlayer()}
+          onTogglePanel={panel => { if (panel === 'mini') void setMiniMode(true); else useWorkspaceStore.getState().openFullPlayer(panel) }} />
+      </footer>
       {searchOpen && <SearchPalette />}
     </div>
   )

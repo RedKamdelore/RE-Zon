@@ -2,8 +2,9 @@ import { BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'node:path'
 import type { Rectangle } from 'electron'
 import type { TrayPlayerState } from '../shared/trayPlayer'
+import { isTrayPlayerCommand, TRAY_POPUP_SIZE } from '../shared/trayPlayer'
 
-const WIDTH = 306, HEIGHT = 306
+const { width: WIDTH, height: HEIGHT } = TRAY_POPUP_SIZE
 
 export function popupPosition(bounds: Rectangle, workArea: Rectangle): {x: number; y: number} {
   const center = bounds.x + bounds.width / 2
@@ -27,9 +28,11 @@ export class TrayPopup {
     ipcMain.handle('tray:state', () => this.state)
     ipcMain.on('tray:command', (event, command: string) => {
       if (event.sender !== this.window?.webContents || typeof command !== 'string') return
-      if (['toggle','stop','next','prev'].includes(command) || /^seek:\d+(\.\d+)?$/.test(command)) this.send(command)
+      if (!isTrayPlayerCommand(command)) return
+      if (['expand', 'lyrics', 'queue'].includes(command)) { this.hide(); this.showMain() }
+      this.send(command)
     })
-    ipcMain.on('tray:showMain', event => { if (event.sender === this.window?.webContents) { this.hide(); this.showMain() } })
+    ipcMain.on('tray:showMain', event => { if (event.sender === this.window?.webContents) { this.hide(); this.showMain(); this.send('expand') } })
     ipcMain.on('tray:hide', event => { if (event.sender === this.window?.webContents) this.hide() })
   }
   private ensure(): BrowserWindow {

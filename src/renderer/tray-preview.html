@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Re:Zon — Предпросмотр трея</title></head>
+<body><div id="root"></div><script type="module">
+import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import TrayPlayer from './src/components/TrayPlayer'
+import './src/styles/global.css'
+import './src/styles/tray.css'
+import coverUrl from '../../resources/icon.png?url'
+const cover = await new Promise(async resolve => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsDataURL(await (await fetch(coverUrl)).blob()) })
+let state = {title:'Тёплый вечер',artist:'Маяк · Линии света',cover,playing:true,currentSec:76,durationSec:214,hasTrack:true,volume:.65}
+const listeners = new Set()
+const publish = () => listeners.forEach(listener => listener({...state}))
+const api = {
+  state: async () => ({...state}),
+  onState: listener => { listeners.add(listener); return () => listeners.delete(listener) },
+  command: command => {
+    if(command === 'toggle') state.playing = !state.playing
+    if(command === 'stop') { state.playing = false; state.currentSec = 0 }
+    if(command === 'next' || command === 'prev') { state.title = state.title === 'Тёплый вечер' ? 'Ночной город' : 'Тёплый вечер'; state.currentSec = 0 }
+    if(command.startsWith('seek:')) state.currentSec = Number(command.slice(5))
+    if(command.startsWith('volume:')) state.volume = Number(command.slice(7))
+    if(['expand','lyrics','queue'].includes(command)) window.open(`./player-preview.html?mode=${command === 'expand' ? 'cover' : command}`,'rezon-player-preview')
+    publish()
+  },
+  showMain: () => api.command('expand'),
+  hide: () => { document.getElementById('root').hidden = true; document.getElementById('reopen').hidden = false },
+}
+createRoot(document.getElementById('root')).render(createElement(TrayPlayer,{api}))
+document.getElementById('reopen').onclick = () => { document.getElementById('root').hidden = false; document.getElementById('reopen').hidden = true }
+</script><button id="reopen" class="btn-outline" hidden>Показать плеер</button></body></html>
