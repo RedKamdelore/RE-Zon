@@ -5,6 +5,7 @@ import { ACCOUNT_SERVICES, SERVICE_NAMES, accountView, migrateAccounts, type Ser
 import type { ServiceId } from '../shared/connections'
 import { openAuthWindow } from './authWindow'
 import { prepareVkSession, importVkBrowser } from './vkBrowser'
+import { closeVkBrowserClients } from './vkBrowserApi'
 import { hasVkSessionCookie, matchVkWebAuthUrl } from './vkWeb'
 import { spAuthUrl, spPkceChallenge, spPkceVerifier, matchSpotifyCallback, spExchange, spRefresh } from './spotify'
 import { yaAuthUrl, matchYaAuthUrl, yaExchange, yaLikes, yaRefresh } from './yandex'
@@ -169,6 +170,7 @@ export function registerAccountIpc(getWindow: () => BrowserWindow): void {
       const data = loadData()
       let connection: {token:string;refreshToken?:string;userId?:string;clientId?:string}
       if (service==='vk') {
+        closeVkBrowserClients(partition)
         prepareVkSession(partition)
         await openAuthWindow(getWindow(),{url:'https://vk.ru/audio',title:'Вход ВКонтакте',partition,match:matchVkWebAuthUrl,
           validateMatch:async()=>hasVkSessionCookie(await session.fromPartition(partition).cookies.get({}))})
@@ -221,6 +223,7 @@ export function registerAccountIpc(getWindow: () => BrowserWindow): void {
     if(id===`${account.service}:default`) delete connections[account.service]
     saveData({...data,connections,serviceAccounts:remaining})
     advance(id)
+    if (account.service === 'vk') closeVkBrowserClients(account.partition)
     await session.fromPartition(account.partition).clearStorageData()
     return true
   })

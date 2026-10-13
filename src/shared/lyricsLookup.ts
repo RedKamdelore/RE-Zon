@@ -4,9 +4,10 @@ export interface LyricsLookupRequest {
   album?: string
   durationSec?: number
   checkAll?: boolean
+  vk?: { audioId: string; accountId?: string }
 }
 
-export const LYRIC_SOURCE_IDS = ['lrclib', 'lrcapi', 'lrcmux', 'synclrc'] as const
+export const LYRIC_SOURCE_IDS = ['lrclib', 'lrcapi', 'lrcmux', 'synclrc', 'vk'] as const
 export type LyricSourceId = typeof LYRIC_SOURCE_IDS[number]
 
 export interface LyricsLookupResult {
@@ -19,7 +20,8 @@ export interface LyricsLookupResult {
 
 export interface LyricsSourceStatus {
   source: LyricSourceId
-  status: 'both' | 'synced' | 'plain' | 'missing' | 'error' | 'skipped'
+  status: 'both' | 'synced' | 'plain' | 'missing' | 'error' | 'skipped' | 'unavailable'
+  message?: string
   result?: LyricsLookupResult
 }
 

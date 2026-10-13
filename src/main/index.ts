@@ -1,7 +1,8 @@
-import { app, BrowserWindow, protocol, net, dialog } from 'electron'
+import { app, BrowserWindow, protocol, net, dialog, Menu } from 'electron'
 import { join, extname } from 'path'
 import { pathToFileURL } from 'url'
 import { registerIpc } from './ipc'
+import { closeVkBrowserClients } from './vkBrowserApi'
 import { createTray } from './tray'
 import { registerUpdates } from './updates'
 import { applyPendingProfileReset } from './profileReset'
@@ -33,7 +34,6 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280, height: 800, minWidth: 940, minHeight: 600,
     backgroundColor: '#171A1E',
-    autoHideMenuBar: true,
     icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(__dirname, '../../resources/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -54,6 +54,7 @@ let tray: Tray | null = null
 let trayPopup: TrayPopup | null = null
 let updates: UpdateController | null = null
 app.on('before-quit', () => {
+  closeVkBrowserClients()
   mainWindow.beginQuit()
   trayPopup?.destroy()
   tray?.destroy()
@@ -77,6 +78,8 @@ app.on('second-instance', () => {
 })
 
 if (profileReady) app.whenReady().then(() => {
+  // Remove the default menu entirely: autoHideMenuBar still reveals it on Alt.
+  Menu.setApplicationMenu(null)
   protocol.handle('media', async (req) => {
     try {
       const filePath = decodeMediaUrl(req.url)

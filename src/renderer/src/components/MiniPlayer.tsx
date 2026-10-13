@@ -2,8 +2,8 @@ import { usePlayerStore } from '../stores/playerStore'
 import Artwork from './Artwork'
 import { fmt } from '../utils/format'
 import { PlayIcon, PauseIcon, StopIcon, PrevIcon, NextIcon, ExpandIcon, MusicNoteIcon } from './icons'
-import { OfflineStatusIcon, offlinePercent, useOfflineStatus } from './OfflineStatus'
-import type { CSSProperties } from 'react'
+import { OfflineStatusIcon, useOfflineStatus } from './OfflineStatus'
+import { playbackTimeline } from '../utils/playbackTimeline'
 
 interface MiniPlayerProps {
   onExpand: () => void
@@ -20,11 +20,15 @@ export default function MiniPlayer({ onExpand }: MiniPlayerProps) {
   const next = usePlayerStore((s) => s.next)
   const prev = usePlayerStore((s) => s.prev)
   const currentSec = usePlayerStore((s) => s.currentSec)
+  const mediaTrackId = usePlayerStore((s) => s.mediaTrackId)
+  const mediaDuration = usePlayerStore((s) => s.mediaDurationSec)
+  const bufferedRanges = usePlayerStore((s) => s.bufferedRanges)
   const seek = usePlayerStore((s) => s.seek)
 
   const track = order.length > 0 ? queue[order[pos]] : undefined
   const offlineItem = useOfflineStatus(track?.id)
-  const downloadPercent = offlinePercent(offlineItem)
+  const duration = mediaTrackId === track?.id && mediaDuration > 0 ? mediaDuration : track?.durationSec ?? 0
+  const timeline = playbackTimeline(currentSec, duration, mediaTrackId === track?.id ? bufferedRanges : [], offlineItem, track?.sourceId === 'local')
   const disabled = queue.length === 0
 
   return (
@@ -63,7 +67,7 @@ export default function MiniPlayer({ onExpand }: MiniPlayerProps) {
       <button className="icon-btn" aria-label="Развернуть плеер" title="Развернуть" onClick={onExpand}>
         <ExpandIcon size={18} />
       </button>
-      <div className="mp-progress"><span>{fmt(currentSec)}</span><input className={`slider${downloadPercent !== undefined ? ' has-download-progress' : ''}${offlineItem?.phase === 'downloading' && downloadPercent === undefined ? ' download-unknown' : ''}`} type="range" aria-label="Позиция воспроизведения" min={0} max={track?.durationSec || 1} step={0.1} value={Math.min(currentSec,track?.durationSec || 1)} disabled={!track?.durationSec} style={{ '--progress': `${track?.durationSec ? Math.min(100,currentSec/track.durationSec*100) : 0}%`, '--download-progress': `${downloadPercent ?? 0}%` } as CSSProperties} onChange={e=>seek(Number(e.target.value))}/><span>{fmt(track?.durationSec || 0)}</span></div>
+      <div className="mp-progress"><span>{fmt(currentSec)}</span><input className="slider playback-timeline" title={timeline.title} type="range" aria-label="Позиция воспроизведения" aria-valuetext={`${fmt(currentSec)} из ${fmt(duration)}`} min={0} max={duration || 1} step={0.1} value={Math.min(currentSec,duration)} disabled={!duration} style={timeline.style} onChange={e=>seek(Number(e.target.value))}/><span>{fmt(duration)}</span></div>
       {playbackError && <p className="mp-error" role="alert">{playbackError}</p>}
     </div>
   )

@@ -9,6 +9,8 @@ import { importVkBrowser, prepareVkSession } from './vkBrowser'
 import { registerAccountIpc } from './accounts'
 import { findAlbumCover } from './artwork'
 import { lookupLyrics, lookupLyricsReport } from './lyricsLookup'
+import { lookupVkLyrics } from './vkLyricsSource'
+import { closeVkBrowserClients } from './vkBrowserApi'
 import { scSearchPage, scResolveStream } from './soundcloud'
 import { lastfmApi, lfmAuthUrl, matchLfmAuthUrl, lfmGetSession, lfmScrobble, type ScrobblePayload } from './lastfm'
 import { openAuthWindow } from './authWindow'
@@ -36,8 +38,8 @@ const COVER_MIME: Record<string, string> = {
 
 export function registerIpc(getWindow: () => BrowserWindow): void {
   registerAccountIpc(getWindow)
-  ipcMain.handle('lyrics:lookup', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyrics(request))
-  ipcMain.handle('lyrics:lookupReport', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyricsReport(request))
+  ipcMain.handle('lyrics:lookup', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyrics(request, fetch, lookupVkLyrics))
+  ipcMain.handle('lyrics:lookupReport', (_event, request: import('../shared/lyricsLookup').LyricsLookupRequest) => lookupLyricsReport(request, fetch, lookupVkLyrics))
   ipcMain.handle('artwork:album',(_e,artist:string,album:string)=>findAlbumCover(artist,album))
   ipcMain.handle('data:load', () => loadData())
   ipcMain.handle('data:profileStatus', () => profileRecoveryStatus())
@@ -149,6 +151,7 @@ export function registerIpc(getWindow: () => BrowserWindow): void {
     delete connections[id]
     saveData({ ...data, connections })
     if (id === 'vk') {
+      closeVkBrowserClients(VK_PARTITION)
       // Полный выход: чистим куки/кэш persist:vk
       const ses = electronSession.fromPartition(VK_PARTITION)
       await ses.clearStorageData()
@@ -174,6 +177,7 @@ export function registerIpc(getWindow: () => BrowserWindow): void {
    * повторный вход не нужен месяцами. Матч: URL вернулся на /audio.
    */
   ipcMain.handle('connect:vk', async (): Promise<{ ok: boolean; error?: string }> => {
+    closeVkBrowserClients(VK_PARTITION)
     prepareVkSession()
     const ok = (await openAuthWindow(getWindow(), {
       url: 'https://vk.ru/audio',

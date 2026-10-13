@@ -6,6 +6,7 @@ import { useSettingsStore } from './settingsStore'
 import { recordPlay } from './statsStore'
 import { isScrobblable, flushSoon, enqueueScrobble } from '../scrobbler'
 import { canSaveOffline } from '@shared/offline'
+import { normalizeBufferedRanges, type BufferedRange } from '@shared/playbackBuffer'
 
 /** Минимальный интерфейс движка для DI (в тестах подменяется фейком) */
 export interface PlayerEngine {
@@ -31,6 +32,9 @@ export interface PlayerState {
   shuffle: boolean
   repeat: RepeatMode
   currentSec: number
+  mediaTrackId: string | null
+  mediaDurationSec: number
+  bufferedRanges: BufferedRange[]
   volume: number // 0..1
   eqGains: number[] // 10 × dB
   playTracks: (tracks: Track[], startIndex: number) => void
@@ -113,10 +117,11 @@ export function createPlayerStore(
   }
 
   const loadTrack = (track: Track | undefined): void => {
+    set({ mediaTrackId: null, mediaDurationSec: 0, bufferedRanges: [] })
     if (!track) { engine.load(''); return }
     resolvePlayableUrl(track,url => {
       const current = get().queue[get().order[get().pos]]
-      if (current?.id === track.id) engine.load(url)
+      if (current?.id === track.id) { engine.load(url); set({ mediaTrackId: track.id }) }
     },() => engine.load(''))
   }
 
@@ -130,6 +135,7 @@ export function createPlayerStore(
   }
 
   const playAt = (state: Pick<PlayerState, 'queue' | 'order' | 'next'>, pos: number): void => {
+    set({ mediaTrackId: null, mediaDurationSec: 0, bufferedRanges: [] })
     const track = state.queue[state.order[pos]]
     const revision = ++startRevision
     resolving = true
@@ -139,7 +145,7 @@ export function createPlayerStore(
         // За время резолва пользователь мог переключить трек — не переигрываем
         const current = get().queue[get().order[get().pos]]
         if (revision === startRevision) resolving = false
-        if (revision === startRevision && get().playing && current?.id === track.id) { pendingPlayId = track.id; watchStart(engine.play(url), revision, track.id); autoSaveAfterPlay(track) }
+        if (revision === startRevision && get().playing && current?.id === track.id) { pendingPlayId = track.id; watchStart(engine.play(url), revision, track.id); set({ mediaTrackId: track.id }); autoSaveAfterPlay(track) }
       },
       (e) => {
         console.error('soundcloud resolve failed:', e)
@@ -156,6 +162,7 @@ export function createPlayerStore(
   // pos уже переключён на трек; стейл-проверка и ошибка-резолва общие с playAt.
   const crossfadeToTrack = (track: Track, xfSec: number): void => {
     if (!engine.crossfadeTo) return
+    set({ mediaTrackId: null, mediaDurationSec: 0, bufferedRanges: [] })
     const revision = ++startRevision
     resolving = true
     resolvePlayableUrl(
@@ -167,6 +174,7 @@ export function createPlayerStore(
         if (revision !== startRevision || !get().playing || current?.id !== track.id) return
         pendingPlayId = track.id
         watchStart(engine.crossfadeTo?.(url, xfSec), revision, track.id)
+        set({ mediaTrackId: track.id })
         autoSaveAfterPlay(track)
       },
       (e) => {
@@ -231,6 +239,9 @@ export function createPlayerStore(
     shuffle: false,
     repeat: 'off',
     currentSec: 0,
+    mediaTrackId: null,
+    mediaDurationSec: 0,
+    bufferedRanges: [],
     volume: 1,
     eqGains: new Array(10).fill(0),
 
@@ -266,6 +277,7 @@ export function createPlayerStore(
           const revision = startRevision
           const current = get().queue[get().order[get().pos]]
           watchStart(engine.resume(), revision, current?.id ?? '')
+          if (current) autoSaveAfterPlay(current)
         }
       }
     },
@@ -543,7 +555,27 @@ export function initPlayerSubscriptions(
   // elements отсутствует — одна подписка, а события без target не фильтруются.
   const elements = engine.elements ?? [engine.element]
   const fromActiveDeck = (e: Event): boolean => !e.target || e.target === engine.element
+  const updateBuffer = (e: Event): void => {
+    if (!fromActiveDeck(e)) return
+    const state = store.getState(), el = engine.element
+    const track = state.queue[state.order[state.pos]]
+    if (!track || state.mediaTrackId !== track.id) return
+    // An old deck/source may still emit events while the next URL is resolving.
+    if (el.currentSrc && el.src && el.currentSrc !== el.src) return
+    const reset = e.type === 'emptied' || e.type === 'loadstart' || el.readyState === 0
+    const knownDuration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : track.durationSec
+    const duration = !reset && Number.isFinite(knownDuration) ? Math.max(0, knownDuration) : 0
+    const ranges: BufferedRange[] = []
+    if (!reset && el.buffered) {
+      const buffered = el.buffered
+      for (let i = 0; i < buffered.length; i++) ranges.push({ start: buffered.start(i), end: buffered.end(i) })
+    }
+    const next = normalizeBufferedRanges(ranges, duration)
+    if (duration === state.mediaDurationSec && next.length === state.bufferedRanges.length && next.every((range, i) => range.start === state.bufferedRanges[i].start && range.end === state.bufferedRanges[i].end)) return
+    store.setState({ mediaDurationSec: duration, bufferedRanges: next })
+  }
   for (const el of elements) {
+    for (const event of ['progress', 'loadedmetadata', 'durationchange', 'canplay', 'emptied', 'loadstart']) el.addEventListener(event, updateBuffer, { signal })
     el.addEventListener('playing', (e) => {
       if (fromActiveDeck(e)) store.getState().markPlaybackStarted()
     }, { signal })
@@ -551,6 +583,7 @@ export function initPlayerSubscriptions(
       'timeupdate',
       (e) => {
         if (!fromActiveDeck(e)) return
+        updateBuffer(e)
         store.setState({ currentSec: engine.element.currentTime })
         store.getState().maybeStartCrossfade()
         // Скробблинг (V3-4c): трек дослушан до порога Last.fm — в очередь
@@ -593,6 +626,7 @@ export function initPlayerSubscriptions(
       { signal },
     )
   }
+  updateBuffer(new Event('progress'))
   const unsubscribe = (): void => {
     ac.abort()
     if (currentSubscription === unsubscribe) currentSubscription = null

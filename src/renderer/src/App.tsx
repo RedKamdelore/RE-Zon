@@ -17,7 +17,7 @@ import MiniPlayer from './components/MiniPlayer'
 import PlayerBar from './components/PlayerBar'
 import FullPlayer from './components/FullPlayer'
 import { useHotkeys } from './hotkeys'
-import { usePlayerStore, initPlayerSubscriptions, getPlayerEngine } from './stores/playerStore'
+import { usePlayerStore, initPlayerSubscriptions } from './stores/playerStore'
 import { useLibraryStore, visibleTracks } from './stores/libraryStore'
 import { usePlaylistStore, setPersistedBase, persistPatch } from './stores/playlistStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -27,6 +27,7 @@ import { useFavoritesStore } from './stores/favoritesStore'
 import { useConnectionsStore } from './stores/connectionsStore'
 import { useAccountsStore } from './stores/accountsStore'
 import { parseLrc } from '@shared/lyrics'
+import type { OfflineItem } from '@shared/offline'
 
 import ServiceCollection from './components/ServiceCollection'
 import { useNavStore, type View } from './stores/navStore'
@@ -152,24 +153,29 @@ export default function App() {
       return Object.fromEntries(['--bg-panel', '--bg-tile', '--text-primary', '--text-secondary', '--accent', '--on-accent', '--border-subtle', '--slider-track'].map(key => [key, css.getPropertyValue(key).trim()]))
     }
     let theme = readTheme()
+    let active = true, offlineEventReceived = false
+    let offlineItems = new Map<string, OfflineItem>()
     const publish = () => {
       const state = usePlayerStore.getState()
       const track = state.queue[state.order[state.pos]]
-      const audioDuration = getPlayerEngine().element.duration
+      const currentMedia = state.mediaTrackId === track?.id
       window.api.publishTrayState({
         title: track?.title ?? 'Ничего не играет', artist: track?.artist ?? 'Re:Zon', cover: track?.coverDataUrl,
         playing: state.playing, currentSec: state.currentSec,
-        durationSec: Number.isFinite(audioDuration) && audioDuration > 0 ? audioDuration : track?.durationSec ?? 0, hasTrack: !!track,
+        durationSec: currentMedia && state.mediaDurationSec > 0 ? state.mediaDurationSec : track?.durationSec ?? 0, hasTrack: !!track,
         volume: state.volume, playbackError: state.playbackError, theme,
+        bufferedRanges: currentMedia ? state.bufferedRanges : [], offline: track ? offlineItems.get(track.id) : undefined, local: track?.sourceId === 'local',
       })
     }
     publish()
     const unsubscribePlayer = usePlayerStore.subscribe(publish)
-    let active = true
+    const updateOffline = (items: OfflineItem[]) => { if (active) { offlineItems = new Map(items.map(item => [item.trackId, item])); publish() } }
+    const unsubscribeOffline = window.api.onOfflineState?.(items => { offlineEventReceived = true; updateOffline(items) })
+    void window.api.offlineList?.().then(items => { if (!offlineEventReceived) updateOffline(items) }).catch(() => {})
     const unsubscribeSettings = useSettingsStore.subscribe((next, previous) => {
       if (next.appearance.theme !== previous.appearance.theme) queueMicrotask(() => { if (active) { theme = readTheme(); publish() } })
     })
-    return () => { active = false; unsubscribePlayer(); unsubscribeSettings() }
+    return () => { active = false; unsubscribePlayer(); unsubscribeSettings(); unsubscribeOffline?.() }
   }, [])
 
   const playlist = view.name === 'playlist' ? playlists.find((p) => p.id === view.id) : undefined

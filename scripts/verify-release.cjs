@@ -16,6 +16,8 @@ const files = new Set(asar.listPackage(archive).map(f => f.replaceAll('\\', '/')
 const privateName = /(?:^|\/)(?:player-data\.json|updates-settings\.json|\.env(?:\.[^/]*)?|[^/]+\.(?:pem|pfx|p12|key))$/i
 const privateEntries = [...files].filter(file => privateName.test(file))
 if (privateEntries.length) throw new Error(`Private or credential-like files found in app.asar: ${privateEntries.join(', ')}`)
+const demoEntries = [...files].filter(file => /(?:^|\/)demo(?:\/|$)|(?:^|\/)(?:player|tray|atlas)-preview\.html$/i.test(file))
+if (demoEntries.length) throw new Error(`Demo or preview files found in app.asar: ${demoEntries.join(', ')}`)
 const resourceNames = fs.readdirSync(path.join(folder, 'win-unpacked', 'resources'))
 const allowedResources = new Set(['app.asar', 'app-update.yml', 'default_app.asar', 'elevate.exe', 'icon.png', 'updates.json'])
 const unexpectedResources = resourceNames.filter(name => !allowedResources.has(name))

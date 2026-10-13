@@ -169,11 +169,13 @@ async function searchSyncLrc(request: LyricsLookupRequest, fetcher: typeof fetch
   return plain ? { text: plain, synced: false, source: 'synclrc' } : null
 }
 
-const searches: Record<LyricSourceId, (request: LyricsLookupRequest, fetcher: typeof fetch) => Promise<LyricsLookupResult | null>> = {
+const searches: Record<Exclude<LyricSourceId, 'vk'>, (request: LyricsLookupRequest, fetcher: typeof fetch) => Promise<LyricsLookupResult | null>> = {
   lrclib: searchLrclib, lrcapi: searchLrcApi, lrcmux: searchLrcMux, synclrc: searchSyncLrc,
 }
 
-export async function lookupLyricsReport(request: LyricsLookupRequest, fetcher: typeof fetch = fetch): Promise<LyricsLookupReport> {
+export type VkLyricsLookup = (request: LyricsLookupRequest) => Promise<LyricsSourceStatus>
+
+export async function lookupLyricsReport(request: LyricsLookupRequest, fetcher: typeof fetch = fetch, vkLookup?: VkLyricsLookup): Promise<LyricsLookupReport> {
   if (!request || typeof request.title !== 'string' || typeof request.artist !== 'string') return { best: null, sources: LYRIC_SOURCE_IDS.map(source => ({ source, status: 'skipped' })), checkedAll: request?.checkAll === true }
   const title = request.title.trim().slice(0, 180), artist = request.artist.trim().slice(0, 180)
   if (!title || !artist) return { best: null, sources: LYRIC_SOURCE_IDS.map(source => ({ source, status: 'skipped' })), checkedAll: request.checkAll === true }
@@ -181,9 +183,12 @@ export async function lookupLyricsReport(request: LyricsLookupRequest, fetcher: 
     title, artist,
     album: typeof request.album === 'string' ? request.album.trim().slice(0, 180) : undefined,
     durationSec: typeof request.durationSec === 'number' && Number.isFinite(request.durationSec) && request.durationSec > 0 ? request.durationSec : undefined,
+    vk: request.vk && typeof request.vk.audioId === 'string' && /^-?[1-9]\d{0,19}_[1-9]\d{0,19}$/.test(request.vk.audioId)
+      ? { audioId: request.vk.audioId, accountId: typeof request.vk.accountId === 'string' ? request.vk.accountId.slice(0, 180) : undefined } : undefined,
   }
   const perform = async (source: LyricSourceId): Promise<LyricsSourceStatus> => {
     try {
+      if (source === 'vk') return vkLookup ? await vkLookup(cleanRequest) : { source, status: 'unavailable', message: 'Подключите VK в разделе «Источники»' }
       const result = await searches[source](cleanRequest, fetcher)
       return result ? { source, status: result.synced ? result.plainText ? 'both' : 'synced' : 'plain', result } : { source, status: 'missing' }
     } catch { return { source, status: 'error' } }
@@ -195,14 +200,21 @@ export async function lookupLyricsReport(request: LyricsLookupRequest, fetcher: 
   } else {
     // Two short waves keep the player responsive without querying every fallback
     // when the first catalogs already have synchronized lyrics.
-    sources.push(...await Promise.all(LYRIC_SOURCE_IDS.slice(0, 2).map(perform)))
-    if (sources.some(entry => entry.result?.synced)) sources.push(...LYRIC_SOURCE_IDS.slice(2).map(source => ({ source, status: 'skipped' as const })))
-    else sources.push(...await Promise.all(LYRIC_SOURCE_IDS.slice(2).map(perform)))
+    const firstWave: LyricSourceId[] = ['lrclib', 'lrcapi', 'vk']
+    const fallbacks: LyricSourceId[] = ['lrcmux', 'synclrc']
+    sources.push(...await Promise.all(firstWave.map(perform)))
+    if (sources.some(entry => entry.result?.synced)) sources.push(...fallbacks.map(source => ({ source, status: 'skipped' as const })))
+    else sources.push(...await Promise.all(fallbacks.map(perform)))
   }
-  best = sources.find(entry => entry.result?.synced)?.result ?? sources.find(entry => entry.result)?.result ?? null
+  sources.sort((a, b) => LYRIC_SOURCE_IDS.indexOf(a.source) - LYRIC_SOURCE_IDS.indexOf(b.source))
+  // Lyrics tied to the exact VK recording take precedence over a catalog match.
+  if (cleanRequest.vk) best = sources.find(entry => entry.source === 'vk' && entry.result?.synced)?.result ?? null
+  best ??= sources.find(entry => entry.result?.synced)?.result
+    ?? (cleanRequest.vk ? sources.find(entry => entry.source === 'vk')?.result : undefined)
+    ?? sources.find(entry => entry.result)?.result ?? null
   return { best, sources, checkedAll: request.checkAll === true }
 }
 
-export async function lookupLyrics(request: LyricsLookupRequest, fetcher: typeof fetch = fetch): Promise<LyricsLookupResult | null> {
-  return (await lookupLyricsReport(request, fetcher)).best
+export async function lookupLyrics(request: LyricsLookupRequest, fetcher: typeof fetch = fetch, vkLookup?: VkLyricsLookup): Promise<LyricsLookupResult | null> {
+  return (await lookupLyricsReport(request, fetcher, vkLookup)).best
 }

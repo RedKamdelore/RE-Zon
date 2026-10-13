@@ -154,6 +154,17 @@ describe('lyricsStore', () => {
     expect(useLyricsStore.getState().reports['local:t1']).toEqual(report)
   })
 
+  it('passes VK identity and account for imported songs and keeps selected VK lyrics', async () => {
+    const result = { source: 'vk' as const, text: '[00:01]VK line', synced: true }
+    const lookupLyricsReport = vi.fn().mockResolvedValue({ best: result, sources: [{ source: 'vk', status: 'synced', result }] })
+    ;(globalThis as Record<string, unknown>).window = { api: { lookupLyricsReport } }
+    const track = { id: 'vk:vk:one:-200_123', sourceId: 'vk', accountId: 'vk:one', title: 'Song', artist: 'Artist', album: 'Album', durationSec: 180, filePath: 'https://example.com/song.mp3' }
+    await searchLyrics(track)
+    expect(lookupLyricsReport).toHaveBeenCalledWith(expect.objectContaining({ vk: { audioId: '-200_123', accountId: 'vk:one' } }))
+    setLyricsSelection(track.id, result)
+    expect(useLyricsStore.getState().selections[track.id]).toEqual(result)
+  })
+
   it('retries previously cached plain lyrics while keeping synchronized results', async () => {
     vi.stubGlobal('localStorage', {
       getItem: () => JSON.stringify({

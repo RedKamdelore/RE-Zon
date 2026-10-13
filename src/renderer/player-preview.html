@@ -10,13 +10,14 @@ const upcoming=[
   {...track,id:'qa:quiet-streets',title:'Тихие улицы',artist:'Эхо',album:'После полуночи',lyrics:undefined},
   {...track,id:'qa:dawn',title:'Первые лучи',artist:'Эхо',album:'После полуночи',lyrics:undefined},
 ]
-usePlayerStore.setState({queue:[track,...upcoming],order:[0,1,2,3],pos:0,currentSec:6,playing:false})
+usePlayerStore.setState({queue:[track,...upcoming],order:[0,1,2,3],pos:0,currentSec:6,playing:false,mediaTrackId:track.id})
 const plain='Тёплый вечер начинается здесь\nГород загорается снова\nМы находим свет в тишине\nИ музыка ведёт нас дальше\nК новому дню'
 useLyricsStore.setState({reports:{[track.id]:{best:null,checkedAll:true,demo:true,sources:[
   {source:'lrclib',status:'both',result:{source:'lrclib',synced:true,text:track.lyrics,plainText:plain}},
   {source:'lrcapi',status:'synced',result:{source:'lrcapi',synced:true,text:track.lyrics}},
   {source:'lrcmux',status:'plain',result:{source:'lrcmux',synced:false,text:plain}},
   {source:'synclrc',status:'missing'},
+  {source:'vk',status:'both',result:{source:'vk',synced:true,text:track.lyrics,plainText:plain}},
 ]}}})
 getPlayerEngine().load(track.filePath)
 const requestedMode = new URLSearchParams(location.search).get('mode')

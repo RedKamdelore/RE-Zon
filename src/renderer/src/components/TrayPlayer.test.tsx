@@ -51,3 +51,14 @@ it('disables playback and seeking when the queue is empty', async () => {
   expect(host.querySelector<HTMLInputElement>('[aria-label="Позиция воспроизведения"]')!.disabled).toBe(true)
   expect(host.textContent).toContain('Выберите музыку')
 })
+
+it('shows stream buffering and keeps the full saved bar after the download finishes', async () => {
+  await act(async () => root.render(<TrayPlayer api={api}/>))
+  act(() => listener({ ...track, durationSec: 100, bufferedRanges: [{ start: 0, end: 70 }] }))
+  const seek = host.querySelector<HTMLInputElement>('[aria-label="Позиция воспроизведения"]')!
+  expect(seek.title).toContain('В буфере: 70%')
+  expect(seek.style.getPropertyValue('--timeline-fill')).toContain('var(--slider-buffer) 70%')
+  act(() => listener({ ...track, offline: { trackId: 'vk:1', title: 'Song', artist: 'Artist', phase: 'saved', bytes: 100, total: 100 } }))
+  expect(seek.title).toContain('Сохранено на компьютере')
+  expect(seek.style.getPropertyValue('--timeline-fill')).toContain('var(--slider-buffer) 100%')
+})

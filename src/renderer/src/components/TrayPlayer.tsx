@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { TrayPlayerApi, TrayPlayerState } from '@shared/trayPlayer'
 import { CloseIcon, ExpandIcon, LyricsIcon, MusicNoteIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, QueueIcon, StopIcon, VolumeIcon } from './icons'
 import { fmt } from '../utils/format'
+import { playbackTimeline } from '../utils/playbackTimeline'
+import { useVolumeWheel } from '../hooks/useVolumeWheel'
 
 const empty: TrayPlayerState = { title: 'Выберите музыку', artist: 'Ваша коллекция ждёт', playing: false, currentSec: 0, durationSec: 0, hasTrack: false, volume: 1 }
 
@@ -38,8 +40,10 @@ export default function TrayPlayer({ api }: { api?: TrayPlayerApi }) {
   const volume = Math.max(0, Math.min(1, volumeDraft ?? state.volume ?? 1))
   const cover = state.cover && /^(data:image\/(png|jpeg|webp|avif);base64,|https:\/\/)/i.test(state.cover) ? state.cover : undefined
   const style = { ...state.theme, '--progress': `${duration ? current / duration * 100 : 0}%` } as CSSProperties
+  const timeline = playbackTimeline(current, duration, state.bufferedRanges, state.offline, state.local)
   const command = (value: string) => api?.command(value)
   const changeVolume = (value: number) => { setVolumeDraft(value); if (value > 0) previousVolume.current = value; command(`volume:${value}`) }
+  const volumeWheelRef = useVolumeWheel(volume, changeVolume)
 
   return <main className={`tray-player${state.playing ? ' is-playing' : ''}`} style={style} aria-label="Плеер в трее">
     <header className="tray-header"><span className="tray-brand">RE:ZON <span>/</span> Сейчас играет</span><button className="icon-btn" aria-label="Закрыть плеер" title="Закрыть · Escape" onClick={() => api?.hide()}><CloseIcon size={16}/></button></header>
@@ -51,7 +55,7 @@ export default function TrayPlayer({ api }: { api?: TrayPlayerApi }) {
       <div className="tray-identity"><strong title={state.title}>{state.hasTrack ? state.title : empty.title}</strong><span title={state.artist}>{state.hasTrack ? state.artist : empty.artist}</span><small className={state.playbackError ? 'tray-error' : ''} role={state.playbackError ? 'alert' : undefined} title={state.playbackError ?? undefined}>{state.playbackError ? 'Воспроизведение остановлено' : !state.hasTrack ? 'Начните в приложении' : state.playing ? 'Воспроизводится' : 'На паузе'}</small></div>
     </div>
     <div className="tray-timeline">
-      <input className="slider" type="range" min="0" max={duration || 1} step="0.1" value={current} disabled={!state.hasTrack || !duration} aria-label="Позиция воспроизведения" aria-valuetext={`${fmt(current)} из ${fmt(duration)}`}
+      <input className="slider playback-timeline" style={timeline.style} title={timeline.title} type="range" min="0" max={duration || 1} step="0.1" value={current} disabled={!state.hasTrack || !duration} aria-label="Позиция воспроизведения" aria-valuetext={`${fmt(current)} из ${fmt(duration)}`}
         onPointerDown={() => { seeking.current = true }} onPointerUp={() => { seeking.current = false }} onPointerCancel={() => { seeking.current = false; setSeekDraft(null) }} onBlur={() => { seeking.current = false; setSeekDraft(null) }}
         onChange={event => { const value = Number(event.target.value); setSeekDraft(value); command(`seek:${value}`) }} />
       <div className="tray-times"><span>{fmt(current)}</span><span>{fmt(duration)}</span></div>
@@ -63,8 +67,8 @@ export default function TrayPlayer({ api }: { api?: TrayPlayerApi }) {
       <button className="icon-btn" disabled={!state.hasTrack} aria-label="Следующий трек" title="Следующий трек" onClick={() => command('next')}><NextIcon size={22}/></button>
       <button className="icon-btn" aria-label="Открыть большой плеер" title="Открыть большой плеер" onClick={() => api?.showMain()}><ExpandIcon size={18}/></button>
     </div>
-    <div className="tray-volume"><button className="icon-btn" aria-label={volume > 0 ? 'Выключить звук' : 'Включить звук'} aria-pressed={volume === 0} title={volume > 0 ? 'Выключить звук' : 'Включить звук'} onClick={() => { if (volume > 0) previousVolume.current = volume; changeVolume(volume > 0 ? 0 : previousVolume.current) }}><VolumeIcon size={17}/></button>
-      <input className="slider" type="range" min="0" max="1" step="0.01" value={volume} aria-label="Громкость" aria-valuetext={`${Math.round(volume * 100)}%`} style={{ '--progress': `${volume * 100}%` } as CSSProperties}
+    <div className="tray-volume" ref={volumeWheelRef}><button className="icon-btn" aria-label={volume > 0 ? 'Выключить звук' : 'Включить звук'} aria-pressed={volume === 0} title={`${volume > 0 ? 'Выключить звук' : 'Включить звук'} · Колесо — громкость`} onClick={() => { if (volume > 0) previousVolume.current = volume; changeVolume(volume > 0 ? 0 : previousVolume.current) }}><VolumeIcon size={17}/></button>
+      <input className="slider" type="range" min="0" max="1" step="0.01" value={volume} title={`Громкость: ${Math.round(volume * 100)}% · Колесо — ±5%`} aria-label="Громкость" aria-valuetext={`${Math.round(volume * 100)}%`} style={{ '--progress': `${volume * 100}%` } as CSSProperties}
         onPointerDown={() => { adjustingVolume.current = true }} onPointerUp={() => { adjustingVolume.current = false }} onPointerCancel={() => { adjustingVolume.current = false; setVolumeDraft(null) }} onBlur={() => { adjustingVolume.current = false; setVolumeDraft(null) }} onChange={event => changeVolume(Number(event.target.value))}/><span>{Math.round(volume * 100)}%</span>
     </div>
     <footer className="tray-shortcuts"><button disabled={!state.hasTrack} onClick={() => command('lyrics')}><LyricsIcon size={15}/>Текст</button><button disabled={!state.hasTrack} onClick={() => command('queue')}><QueueIcon size={15}/>Очередь</button><button className="tray-open" onClick={() => api?.showMain()}>Открыть<ExpandIcon size={14}/></button></footer>

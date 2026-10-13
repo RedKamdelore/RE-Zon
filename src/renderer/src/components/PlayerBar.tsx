@@ -4,7 +4,9 @@ import { usePlayerStore } from '../stores/playerStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { persistPatch } from '../stores/playlistStore'
 import { fmt } from '../utils/format'
-import { OfflineStatusIcon, offlinePercent, useOfflineStatus } from './OfflineStatus'
+import { OfflineStatusIcon, useOfflineStatus } from './OfflineStatus'
+import { playbackTimeline } from '../utils/playbackTimeline'
+import { useVolumeWheel } from '../hooks/useVolumeWheel'
 import {
   PlayIcon,
   PauseIcon,
@@ -46,6 +48,9 @@ export default function PlayerBar({ onTogglePanel, onExpand, expanded = false, a
   const shuffle = usePlayerStore((s) => s.shuffle)
   const repeat = usePlayerStore((s) => s.repeat)
   const currentSec = usePlayerStore((s) => s.currentSec)
+  const mediaTrackId = usePlayerStore((s) => s.mediaTrackId)
+  const mediaDuration = usePlayerStore((s) => s.mediaDurationSec)
+  const bufferedRanges = usePlayerStore((s) => s.bufferedRanges)
   const volume = usePlayerStore((s) => s.volume)
   const togglePlay = usePlayerStore((s) => s.togglePlay)
   const stop = usePlayerStore((s) => s.stop)
@@ -58,7 +63,8 @@ export default function PlayerBar({ onTogglePanel, onExpand, expanded = false, a
 
   const track = order.length > 0 ? queue[order[pos]] : undefined
   const offlineItem = useOfflineStatus(track?.id)
-  const downloadPercent = offlinePercent(offlineItem)
+  const duration = mediaTrackId === track?.id && mediaDuration > 0 ? mediaDuration : track?.durationSec ?? 0
+  const timeline = playbackTimeline(currentSec, duration, mediaTrackId === track?.id ? bufferedRanges : [], offlineItem, track?.sourceId === 'local')
   const disabled = !track
   const previousVolume = useRef(volume || .7)
   const expandLabel = expanded ? 'Свернуть большой плеер' : 'Открыть большой плеер'
@@ -72,6 +78,7 @@ export default function PlayerBar({ onTogglePanel, onExpand, expanded = false, a
     if (v > 0) previousVolume.current = v
     persistPatch({ volume: usePlayerStore.getState().volume })
   }
+  const volumeWheelRef = useVolumeWheel(volume, changeVolume)
 
   return (
     <section className="playerbar" aria-label="Управление воспроизведением">
@@ -157,19 +164,20 @@ export default function PlayerBar({ onTogglePanel, onExpand, expanded = false, a
         <div className="pb-seek">
           <span>{fmt(currentSec)}</span>
           <input
-            className={`slider${downloadPercent !== undefined ? ' has-download-progress' : ''}${offlineItem?.phase === 'downloading' && downloadPercent === undefined ? ' download-unknown' : ''}`}
+            className="slider playback-timeline"
+            title={timeline.title}
             aria-label="Позиция воспроизведения"
-            aria-valuetext={`${fmt(currentSec)} из ${fmt(track?.durationSec ?? 0)}`}
-            disabled={!track?.durationSec}
+            aria-valuetext={`${fmt(currentSec)} из ${fmt(duration)}`}
+            disabled={!duration}
             type="range"
             min={0}
-            max={track?.durationSec ?? 0}
+            max={duration || 1}
             step={0.1}
-            value={Math.min(currentSec, track?.durationSec ?? 0)}
-            style={{ ...progressStyle(currentSec, track?.durationSec ?? 0), '--download-progress': `${downloadPercent ?? 0}%` } as CSSProperties}
+            value={Math.min(currentSec, duration)}
+            style={timeline.style}
             onChange={(e) => seek(Number(e.target.value))}
           />
-          <span>{fmt(track?.durationSec ?? 0)}</span>
+          <span>{fmt(duration)}</span>
           <button className="icon-btn pb-stop-inline" title="Стоп — остановить и вернуться к началу" aria-label="Стоп" disabled={disabled} onClick={stop}>
             <StopIcon size={17} />
           </button>
@@ -191,7 +199,8 @@ export default function PlayerBar({ onTogglePanel, onExpand, expanded = false, a
         <button className="icon-btn pb-mini" title="Мини-плеер" aria-label="Мини-плеер" onClick={() => onTogglePanel('mini')}>
           <MiniIcon size={18} />
         </button>
-        <button className="icon-btn pb-mute" title={volume > 0 ? 'Выключить звук' : 'Включить звук'} aria-label={volume > 0 ? 'Выключить звук' : 'Включить звук'} aria-pressed={volume === 0} onClick={() => { if (volume > 0) previousVolume.current = volume; changeVolume(volume > 0 ? 0 : previousVolume.current) }}><VolumeIcon size={18}/></button>
+        <div className="pb-volume" ref={volumeWheelRef}>
+        <button className="icon-btn pb-mute" title={`${volume > 0 ? 'Выключить звук' : 'Включить звук'} · Колесо — громкость`} aria-label={volume > 0 ? 'Выключить звук' : 'Включить звук'} aria-pressed={volume === 0} onClick={() => { if (volume > 0) previousVolume.current = volume; changeVolume(volume > 0 ? 0 : previousVolume.current) }}><VolumeIcon size={18}/></button>
         <input
           className="slider"
           type="range"
@@ -201,9 +210,11 @@ export default function PlayerBar({ onTogglePanel, onExpand, expanded = false, a
           value={volume}
           style={progressStyle(volume, 1)}
           onChange={(e) => changeVolume(Number(e.target.value))}
-          title="Громкость"
+          title={`Громкость: ${Math.round(volume * 100)}% · Колесо — ±5%`}
           aria-label="Громкость"
+          aria-valuetext={`${Math.round(volume * 100)}%`}
         />
+        </div>
       </div>
     </section>
   )

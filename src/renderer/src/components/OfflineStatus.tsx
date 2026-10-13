@@ -24,6 +24,7 @@ export function useOfflineStatus(trackId?: string): OfflineItem | undefined {
 }
 
 export function offlinePercent(item?: OfflineItem): number | undefined {
+  if (item?.phase === 'saved') return 100
   if (item?.phase !== 'downloading' || !item.total) return undefined
   return Math.max(0, Math.min(100, item.bytes / item.total * 100))
 }
@@ -39,7 +40,7 @@ export function OfflineStatusIcon({ track, item }: { track?: Track; item?: Offli
       : item?.phase === 'downloading' ? `Сохраняется: ${percent === undefined ? 'размер неизвестен' : `${Math.floor(percent)}%`}`
         : item?.phase === 'queued' ? 'Ожидает сохранения'
           : item?.phase === 'error' ? `Не удалось сохранить: ${item.error ?? 'ошибка загрузки'}`
-            : 'Доступно онлайн, будет сохранено при воспроизведении'
+            : 'Доступно онлайн; локальная копия ещё не сохранена'
   return <span className={`offline-indicator${saved ? ' is-saved' : ''}${item?.phase === 'downloading' ? ' is-downloading' : ''}${!eligible ? ' is-unavailable' : ''}${item?.phase === 'error' ? ' is-error' : ''}`} role="status" aria-label={label} title={label}>
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M7 18H6a4 4 0 0 1-.5-7.97 6.5 6.5 0 0 1 12.62-1.3A4.7 4.7 0 0 1 18 18h-1" />

@@ -114,7 +114,7 @@ describe('automatic lyrics lookup', () => {
     }) as unknown as typeof fetch
     const report = await lookupLyricsReport({ ...request, checkAll: true }, fetcher)
     expect(report.best).toEqual({ text: '[00:01.00]Timed', synced: true, source: 'synclrc' })
-    expect(report.sources.map(entry => entry.status)).toEqual(['plain', 'error', 'plain', 'synced'])
+    expect(report.sources.map(entry => entry.status)).toEqual(['plain', 'error', 'plain', 'synced', 'unavailable'])
     expect(report.checkedAll).toBe(true)
   })
 
@@ -126,8 +126,34 @@ describe('automatic lyrics lookup', () => {
             : { track: 'Song', artist: 'Artist', duration: 180, synced: '[00:01.00]Timed', plain: 'Ordinary' },
     })) as unknown as typeof fetch
     const report = await lookupLyricsReport({ ...request, checkAll: true }, fetcher)
-    expect(report.sources.map(entry => entry.status)).toEqual(['both', 'plain', 'synced', 'both'])
+    expect(report.sources.map(entry => entry.status)).toEqual(['both', 'plain', 'synced', 'both', 'unavailable'])
     expect(report.sources[0].result?.plainText).toBe('Plain')
     expect(report.sources[3].result?.plainText).toBe('Ordinary')
+  })
+
+  it('checks VK even when a public catalog has timed lyrics and prefers the exact VK recording', async () => {
+    const vk = { source: 'vk' as const, synced: true, text: '[00:01]Exact recording' }
+    const lookupVk = vi.fn(async () => ({ source: 'vk' as const, status: 'synced' as const, result: vk }))
+    const fetcher = sources([{ trackName: 'Song', artistName: 'Artist', duration: 180, syncedLyrics: '[00:01]Catalog' }], [])
+    const report = await lookupLyricsReport({ ...request, vk: { audioId: '1_2', accountId: 'vk:one' } }, fetcher, lookupVk)
+    expect(report.best).toEqual(vk)
+    expect(lookupVk).toHaveBeenCalledWith(expect.objectContaining({ vk: { audioId: '1_2', accountId: 'vk:one' } }))
+    expect(report.sources.find(entry => entry.source === 'vk')?.status).toBe('synced')
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps synchronized catalog lyrics when VK only has plain text or fails', async () => {
+    const fetcher = sources([{ trackName: 'Song', artistName: 'Artist', duration: 180, syncedLyrics: '[00:01]Catalog' }], [])
+    const vkLookup = vi.fn(async () => ({ source: 'vk' as const, status: 'plain' as const, result: { source: 'vk' as const, text: 'Plain VK', synced: false } }))
+    expect((await lookupLyricsReport({ ...request, vk: { audioId: '1_2' } }, fetcher, vkLookup)).best?.source).toBe('lrclib')
+    expect((await lookupLyricsReport(request, fetcher, async () => { throw new Error('VK unavailable') })).best?.source).toBe('lrclib')
+  })
+
+  it('prefers plain lyrics attached to the exact VK track when no source has timing', async () => {
+    const fetcher = sources([{ trackName: 'Song', artistName: 'Artist', duration: 180, plainLyrics: 'Catalog plain' }], [])
+    const vk = { source: 'vk' as const, text: 'Track plain', synced: false }
+    const report = await lookupLyricsReport({ ...request, vk: { audioId: '1_2' } }, fetcher,
+      async () => ({ source: 'vk', status: 'plain', result: vk }))
+    expect(report.best).toEqual(vk)
   })
 })

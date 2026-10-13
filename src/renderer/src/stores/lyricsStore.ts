@@ -74,7 +74,7 @@ function readAutomaticCache(): Record<string, LyricsLookupResult | null> {
     return Object.fromEntries(Object.entries(value).filter(([, entry]) => {
       const lyric = entry as Partial<LyricsLookupResult> | null
       // Old plain-only cache entries must be retried after new synchronized sources are added.
-      return (lyric?.source === 'lrclib' || lyric?.source === 'lrcapi' || lyric?.source === 'lrcmux' || lyric?.source === 'synclrc') && lyric.synced === true && typeof lyric.text === 'string' && lyric.text.length <= 50_000 && parseLrc(lyric.text).some(line => !!line.text)
+      return !!lyric && LYRIC_SOURCE_IDS.includes(lyric.source as LyricsLookupResult['source']) && lyric.synced === true && typeof lyric.text === 'string' && lyric.text.length <= 50_000 && parseLrc(lyric.text).some(line => !!line.text)
     })) as Record<string, LyricsLookupResult | null>
   } catch { return {} }
 }
@@ -91,7 +91,10 @@ export function searchLyrics(track: Track, force = false): Promise<void> {
   if (!force && (Object.prototype.hasOwnProperty.call(state.automatic, track.id) || Object.prototype.hasOwnProperty.call(state.overrides, track.id))) return Promise.resolve()
   if (!window.api?.lookupLyricsReport) return Promise.resolve()
   useLyricsStore.setState({ searching: { ...state.searching, [track.id]: true }, errors: { ...state.errors, [track.id]: '' } })
-  const lookup = window.api.lookupLyricsReport({ title: track.title, artist: track.artist, album: track.album, durationSec: track.durationSec, checkAll: force })
+  const vkTrack = [track, ...(track.alternateSources ?? [])].find(candidate => candidate.sourceId === 'vk' && /^-?[1-9]\d{0,19}_[1-9]\d{0,19}$/.test(candidate.id.split(':').at(-1) ?? ''))
+  const lookup = window.api.lookupLyricsReport({ title: track.title, artist: track.artist, album: track.album, durationSec: track.durationSec, checkAll: force,
+    ...(vkTrack ? { vk: { audioId: vkTrack.id.split(':').at(-1)!, accountId: vkTrack.accountId } } : {}),
+  })
     .then(report => useLyricsStore.setState(s => {
       // A manual refresh can fail when the catalog or connection is unavailable.
       // Keep a known synchronized result rather than replacing it with plain text.

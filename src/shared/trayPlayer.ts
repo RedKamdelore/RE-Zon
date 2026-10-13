@@ -1,3 +1,6 @@
+import type { BufferedRange } from './playbackBuffer'
+import type { OfflineItem } from './offline'
+
 export interface TrayPlayerState {
   title: string
   artist: string
@@ -9,6 +12,9 @@ export interface TrayPlayerState {
   volume?: number
   playbackError?: string | null
   theme?: Record<string, string>
+  bufferedRanges?: BufferedRange[]
+  offline?: OfflineItem
+  local?: boolean
 }
 
 export interface TrayPlayerApi {

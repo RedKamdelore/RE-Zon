@@ -82,8 +82,6 @@
 .play-btn{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;background:var(--accent);color:var(--on-accent);border:0;border-radius:13px;padding:0}
 .pb-seek{display:flex;align-items:center;gap:8px}
 .pb-seek .slider{flex:1;min-width:0}
-.pb-seek .slider.has-download-progress,.mp-progress .slider.has-download-progress{background:linear-gradient(to right,var(--accent) var(--progress,0%),transparent var(--progress,0%)),linear-gradient(to right,color-mix(in srgb,var(--accent) 38%,var(--slider-track)) var(--download-progress,0%),var(--slider-track) var(--download-progress,0%))}
-.pb-seek .slider.download-unknown,.mp-progress .slider.download-unknown{box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 40%,transparent)}
 .pb-seek>span{font-size:10px;min-width:28px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
 .pb-stop-control{display:none}
 .pb-seek .pb-stop-inline{width:28px;height:28px}
@@ -98,7 +96,8 @@
 .repeat-badge{position:absolute;font-size:8px;bottom:0;right:0;color:var(--accent)}
 .pb-right{display:flex;align-items:center;justify-content:center;gap:8px}
 .pb-right>button:not([title="Мини-плеер"]){display:none}
-.pb-right>.slider{width:104px}
+.pb-volume{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.pb-volume>.slider{width:104px}
 .pb-right>svg{width:15px;color:var(--text-secondary)}
 .controls-disabled{opacity:.45;pointer-events:none}
 .rp-section{font-size:10px;color:var(--text-secondary);font-weight:500;letter-spacing:.6px;margin:10px 0}

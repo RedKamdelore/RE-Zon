@@ -538,6 +538,52 @@ describe('initPlayerSubscriptions', () => {
   })
 })
 
+describe('stream buffering', () => {
+  const ranges = (...pairs: number[][]) => ({ length: pairs.length, start: (i: number) => pairs[i][0], end: (i: number) => pairs[i][1] })
+
+  it('reads real buffered segments, learns duration, and clears them on source changes', () => {
+    const { engine, fire } = makeFakeEngine()
+    Object.assign(engine.element, { duration: 200, readyState: 3, buffered: ranges([0, 50], [100, 140]) })
+    const store = createPlayerStore(engine)
+    store.getState().playTracks(TRACKS, 0)
+    const unsubscribe = initPlayerSubscriptions(engine, store)
+    try {
+      expect(store.getState().mediaDurationSec).toBe(200)
+      expect(store.getState().bufferedRanges).toEqual([{ start: 0, end: 50 }, { start: 100, end: 140 }])
+      Object.assign(engine.element, { buffered: ranges([0, 90], [100, 160]) })
+      fire('progress')
+      expect(store.getState().bufferedRanges[0].end).toBe(90)
+      store.getState().next({ manual: true })
+      expect(store.getState().bufferedRanges).toEqual([])
+      expect(store.getState().mediaDurationSec).toBe(0)
+      fire('emptied')
+      expect(store.getState().bufferedRanges).toEqual([])
+    } finally { unsubscribe() }
+  })
+
+  it('ignores the fading deck after a crossfade switches tracks', () => {
+    const deck = (end: number) => Object.assign(new EventTarget(), { duration: 180, currentTime: 0, readyState: 3, buffered: ranges([0, end]) }) as unknown as HTMLAudioElement
+    const first = deck(150), second = deck(30)
+    const { engine } = makeFakeEngine()
+    let active = first
+    Object.defineProperty(engine, 'element', { get: () => active })
+    engine.elements = [first, second]
+    engine.crossfadeTo = () => { active = second }
+    const store = createPlayerStore(engine, () => 4)
+    store.getState().playTracks(TRACKS, 0)
+    const unsubscribe = initPlayerSubscriptions(engine, store)
+    try {
+      store.getState().next({ manual: true })
+      first.dispatchEvent(new Event('progress'))
+      expect(store.getState().bufferedRanges).toEqual([])
+      second.dispatchEvent(new Event('progress'))
+      expect(store.getState().bufferedRanges).toEqual([{ start: 0, end: 30 }])
+      first.dispatchEvent(new Event('emptied'))
+      expect(store.getState().bufferedRanges).toEqual([{ start: 0, end: 30 }])
+    } finally { unsubscribe() }
+  })
+})
+
 describe('crossfade', () => {
   function makeXfStore(xfSec: number): ReturnType<typeof makeFakeEngine> & { store: ReturnType<typeof createPlayerStore> } {
     const fake = makeFakeEngine()
@@ -835,6 +881,19 @@ describe('direct audio offline playback', () => {
     createPlayerStore(engine).getState().playTracks([directTrack], 0)
     await vi.waitFor(() => expect(calls.play).toEqual([mediaUrl('C:\\ReZon\\offline\\example.mp3')]))
     expect(offlineResolve).toHaveBeenCalledWith(directTrack.id)
+  })
+
+  it('auto saves a VK track started from a preloaded queue', async () => {
+    const { engine } = makeFakeEngine()
+    const vk = { ...directTrack, id: 'vk:queued', sourceId: 'vk' }
+    const offlineAutoQueue = vi.fn().mockResolvedValue([])
+    ;(globalThis as Record<string, unknown>).window = { api: { offlineResolve: vi.fn().mockResolvedValue(null), offlineAutoQueue } }
+    const store = createPlayerStore(engine)
+    store.getState().enqueue(vk)
+    await Promise.resolve()
+    expect(offlineAutoQueue).not.toHaveBeenCalled()
+    store.getState().togglePlay()
+    expect(offlineAutoQueue).toHaveBeenCalledWith(vk)
   })
 
   it('uses the remote URL when the copy is absent or lookup fails', async () => {

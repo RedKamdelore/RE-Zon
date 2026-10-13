@@ -55,6 +55,7 @@ it('shows the displayed text and the result from each lyrics source', () => {
       {source:'lrcapi',status:'missing'},
       {source:'lrcmux',status:'error'},
       {source:'synclrc',status:'both',result:{text:'[00:02]Сеть',plainText:'Обычная сеть',synced:true,source:'synclrc'}},
+      {source:'vk',status:'plain',result:{text:'Текст VK',synced:false,source:'vk'}},
     ],
   }}})
   act(() => root.render(<RightPanel panel="lyrics" onClose={()=>{}}/>))
@@ -66,6 +67,7 @@ it('shows the displayed text and the result from each lyrics source', () => {
   expect(host.querySelector('.rp-lyrics-sources')?.textContent).toContain('LrcMuxОшибка при проверке')
   expect(host.querySelector('.rp-lyrics-sources')?.textContent).toContain('SyncLRCЕсть оба текста · 1 строка с таймкодами')
   expect(host.querySelector('.rp-lyrics-sources')?.textContent).toContain('Обычный: Обычная сеть')
+  expect(host.querySelector('.rp-lyrics-sources')?.textContent).toContain('VKЕсть обычный текст · 1 строка')
 })
 it('checks every source when the menu opens', async () => {
   const lookupLyricsReport = vi.fn().mockResolvedValue({best:null,checkedAll:true,sources:[

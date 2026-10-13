@@ -18,7 +18,7 @@ interface RightPanelProps {
 }
 
 const TITLES = { queue: 'Очередь', lyrics: 'Текст песни', eq: 'Эквалайзер' } as const
-const LYRIC_SOURCE_NAMES: Record<string, string> = { lrclib: 'LRCLIB', lrcapi: 'LrcAPI', lrcmux: 'LrcMux', synclrc: 'SyncLRC' }
+const LYRIC_SOURCE_NAMES: Record<string, string> = { lrclib: 'LRCLIB', lrcapi: 'LrcAPI', lrcmux: 'LrcMux', synclrc: 'SyncLRC', vk: 'VK' }
 
 function lyricPreview(value: string): string {
   return (parseLrc(value).find(line => line.text)?.text ?? value.split(/\r?\n/).find(line => line.trim()) ?? '').trim().slice(0, 90)
@@ -33,6 +33,8 @@ function lyricSourceSummary(entry: LyricsSourceStatus, searching: boolean, avail
   if (entry.status === 'both' && entry.result) return `Есть оба текста · ${lyricLineCount(parseLrc(entry.result.text).filter(line => line.text).length)} с таймкодами`
   if (entry.status === 'synced' && entry.result) return `Есть синхронный текст · ${lyricLineCount(parseLrc(entry.result.text).filter(line => line.text).length)}`
   if (entry.status === 'plain' && entry.result) return `Есть обычный текст · ${lyricLineCount(entry.result.text.split(/\r?\n/).filter(line => line.trim()).length)}`
+  if (entry.status === 'unavailable') return entry.message ?? 'Подключите VK в разделе «Источники»'
+  if (entry.status === 'error' && entry.message) return entry.message
   if (entry.status === 'error') return 'Ошибка при проверке'
   if (entry.status === 'missing') return 'Не нашли'
   return searching ? 'Проверяем…' : available ? 'Ожидает проверки' : 'Проверка доступна в приложении'
